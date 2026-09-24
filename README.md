@@ -1,136 +1,117 @@
 # Mapping Navision → Business Central
 
-Outil autonome pour remplir un package de configuration Business Central (Excel) à partir d'un export brut Navision. Il permet de mapper les colonnes, de formater et convertir les valeurs, de sauvegarder les modèles de mapping et de générer le package.
+Cet outil remplit un package de configuration Business Central (fichier Excel) avec les données d'un export Navision. Vous indiquez quelle colonne Navision alimente chaque champ BC, vous corrigez les valeurs si besoin, puis vous téléchargez le package prêt à importer.
 
-Le livrable est **un seul fichier HTML** (`dist/Mapping_NAV_BC.html`). Il s'ouvre par double-clic dans Edge ou Chrome, sans installation ni connexion réseau.
+L'outil tient dans un seul fichier, `Mapping_NAV_BC.html`. Il s'ouvre par double-clic dans Edge ou Chrome, sans installation ni connexion. Les données restent sur votre ordinateur.
 
-## Arborescence
+## Ce qu'il vous faut
+
+- **L'export Navision** (.xlsx ou .csv) : une feuille par table, avec les noms de colonnes sur la première ligne.
+- **Le package BC de référence** (.xlsx) : exporté depuis *Packages de configuration* dans Business Central. L'outil reprend sa structure à l'identique.
+- **Un modèle de mapping** (.json, facultatif) : un mapping enregistré lors d'une session précédente.
+
+## Utilisation pas à pas
+
+### 1. Charger les fichiers
+
+Sur l'écran d'accueil, déposez ou sélectionnez l'export Navision puis le package BC. Si vous avez un modèle de mapping, chargez-le aussi : il sera appliqué dès que les deux fichiers seront ouverts.
+
+Pour remplacer un fichier plus tard, cliquez sur son nom en haut de l'écran.
+
+### 2. Choisir la source de chaque table
+
+La colonne de gauche liste les tables du package, avec une barre indiquant la part de champs alimentés. Pour chaque table, choisissez :
+
+- **la feuille source Navision** (l'outil propose celle dont le nom correspond) ;
+- **la ligne d'en-tête** si les noms de colonnes ne sont pas sur la première ligne ;
+- **le sort des données déjà présentes dans le package** :
+  - *Remplacer par la source* : seules les lignes Navision sont conservées ;
+  - *Ajouter à l'existant* : les lignes Navision s'ajoutent à celles du package ;
+  - *Laisser inchangées* : la table est recopiée telle quelle.
+
+### 3. Associer les champs
+
+Dans l'onglet **Correspondances**, chaque ligne est un champ BC. Cliquez sur la source pour choisir une colonne Navision.
+
+**Mapper automatiquement** associe les colonnes dont le nom correspond. Une association proposée par simple ressemblance est marquée « à vérifier » : confirmez-la ou changez-la.
+
+Un champ peut être alimenté de quatre façons :
+
+| Source | Effet |
+|---|---|
+| Colonne | La valeur d'une colonne Navision. |
+| Constante | La même valeur sur toutes les lignes. |
+| Combinaison | Plusieurs colonnes assemblées, par exemple `{Nom} {Prénom}`. |
+| Aucune | Le champ reste vide ou reçoit la valeur par défaut BC. |
+
+Les filtres *Alimentés*, *Non alimentés* et *Anomalies* ainsi que la recherche aident à parcourir les longues tables.
+
+### 4. Ajuster les valeurs
+
+Sélectionnez un champ pour ouvrir le panneau de droite. Vous pouvez :
+
+- **Remplacer des valeurs** : l'outil liste les valeurs distinctes de la colonne et vous indiquez par quoi remplacer chacune. C'est indispensable pour les champs *Option* (par exemple « Homme » et « Femme » deviennent « Personne »).
+- **Mettre en forme** : compléter à gauche jusqu'à une longueur (par exemple `42` devient `0000042`), ajouter un préfixe ou un suffixe, changer la casse, définir une valeur si la source est vide.
+- **Copier et coller la mise en forme** d'un champ à l'autre.
+
+Le panneau affiche aussi un aperçu des valeurs avant et après transformation, et la liste des lignes en anomalie.
+
+L'onglet **Aperçu du résultat** montre la table telle qu'elle sera écrite dans le package.
+
+### 5. Vérifier les anomalies
+
+L'outil contrôle chaque valeur par rapport au type du champ BC (texte, code, date, nombre, booléen, option) et à sa longueur maximale :
+
+- **en rouge, les erreurs** : la valeur ne peut pas être importée (date invalide, option inconnue, texte trop long…) ;
+- **en orange, les alertes** : la valeur a été modifiée (tronquée, par exemple).
+
+Les doublons et les valeurs vides sur la clé primaire (premier champ) sont aussi signalés.
+
+### 6. Générer le package
+
+Cliquez sur **Générer le package**. Un récapitulatif indique, pour chaque table, la source, le nombre de lignes finales et l'état des contrôles. Vous pouvez télécharger un **rapport des anomalies** (CSV) pour les corriger dans Navision.
+
+Le fichier produit s'appelle `<nom du package>_rempli_<date>.xlsx`. Les valeurs encore en erreur sont laissées vides, sauf les options inconnues, qui sont écrites telles quelles.
+
+### 7. Importer dans Business Central
+
+Dans *Packages de configuration*, ouvrez le package, lancez **Importer d'Excel** et sélectionnez le fichier généré. Contrôlez ensuite les erreurs dans *Données du package* avant d'appliquer.
+
+## Options de génération
+
+Le bouton **Options** propose les réglages suivants. Ils sont enregistrés avec le mapping.
+
+- **Compléter les champs vides avec les valeurs par défaut BC** (`false`, `0`, première option…), déduites des lignes déjà présentes dans le package.
+- **Tronquer les valeurs trop longues** au lieu de les signaler en erreur.
+- **Mettre en majuscules les champs de type Code**, comme le fait Business Central.
+- **Ignorer les lignes entièrement vides** de la source.
+
+## Enregistrer son travail
+
+Le mapping en cours est sauvegardé automatiquement dans le navigateur. Cette sauvegarde est liée à l'emplacement du fichier HTML : si vous le déplacez ou le renommez, elle n'est plus retrouvée.
+
+Pour conserver ou partager un mapping, cliquez sur **Exporter le mapping** (ou Ctrl+S). Vous obtenez un fichier .json que vous rechargerez avec **Importer le mapping**, par exemple pour traiter un nouvel export Navision avec les mêmes règles.
+
+## Raccourcis clavier
+
+| Touche | Action |
+|---|---|
+| ↑ / ↓ | Passer au champ précédent ou suivant |
+| Entrée ou F2 | Choisir la colonne source du champ |
+| Suppr | Retirer la source du champ |
+| Ctrl+S | Exporter le mapping |
+| Échap | Fermer le sélecteur de colonne |
+
+## Format des valeurs écrites
+
+Les valeurs sont écrites comme dans un export BC : dates au format `AAAA-MM-JJ`, décimaux avec un point, booléens `true` ou `false`, options par leur libellé. Les dates vides de Navision (01/01/1753) deviennent des champs vides.
+
+## Construire le fichier HTML
+
+Le code source se trouve dans `src/`. Pour produire `dist/Mapping_NAV_BC.html`, lancez avec Node.js :
 
 ```
-nav-bc-mapper/
-├─ src/
-│  ├─ index.html            Structure de la page (écran d'accueil, espace de travail, dialogues)
-│  ├─ styles.css            Styles (thème clair/sombre via variables CSS)
-│  └─ js/                   Scripts chargés dans cet ordre :
-│     ├─ 01-core.js         État global S, constantes, utilitaires (échappement, colonnes Excel, toasts…)
-│     ├─ 02-xlsx-io.js      Lecture .xlsx/.csv bas niveau, chargement du package BC (types, défauts, gabarits)
-│     ├─ 03-convert.js      Valeurs source → chaîne, conversions vers les types BC (Date, Decimal, Boolean, Option…)
-│     ├─ 04-engine.js       Modèle de mapping, contexte source, compilation des champs, contrôles, mapping auto
-│     ├─ 05-persistence.js  Sauvegarde locale (localStorage), import/export JSON du mapping
-│     ├─ 06-generate.js     Réécriture XML des feuilles, sharedStrings, tables ; rapport CSV
-│     ├─ 07-ui.js           Rendu (tables, grille, aperçu, inspecteur, sélecteur de colonne), événements, dialogues
-│     └─ 08-main.js         Chargement des fichiers et démarrage
-├─ vendor/
-│  └─ jszip.min.js          JSZip 3.10.1 (MIT) : lecture/écriture des archives .xlsx
-├─ build.js                 Compilation avec Node.js (sans dépendance)
-├─ build.ps1                Compilation avec PowerShell (si Node.js n'est pas installé)
-├─ build.cmd                Double-clic : utilise Node si présent, sinon PowerShell
-├─ package.json             Raccourcis npm run build / npm run watch
-└─ dist/                    Sortie compilée (générée)
-```
-
-## Développer
-
-Aucune étape de compilation n'est nécessaire pendant le développement. Ouvrez directement `src/index.html` dans Edge ou Chrome. Après chaque modification d'un fichier de `src/`, rechargez la page avec F5.
-
-Pour déboguer, ouvrez les outils de développement (F12). L'état complet de l'application est exposé dans la variable globale `S` :
-
-- `S.raw` : l'export Navision lu (feuilles et cellules typées).
-- `S.pkg` : le package BC, avec ses tables, ses champs (type, longueur, options, valeur par défaut) et le XML d'origine.
-- `S.map` : le mapping courant (c'est ce qui est exporté en JSON).
-- `S.val` : les résultats des contrôles par table et par champ.
-
-Les scripts sont des scripts classiques, pas des modules ES : ils partagent la même portée globale et doivent rester chargés dans l'ordre de leur numéro. Ce choix permet d'ouvrir la page en `file://` sans serveur, ce que les modules ES interdisent.
-
-## Compiler
-
-La compilation insère le CSS, JSZip et les scripts dans un fichier HTML unique : `dist/Mapping_NAV_BC.html`.
-
-**Option 1 : double-clic.** Lancez `build.cmd`. Il utilise Node.js s'il est installé, sinon PowerShell.
-
-**Option 2 : Node.js (16 ou plus).**
-
-```bat
 node build.js
 ```
 
-Avec npm, `npm run build` fait la même chose. `npm run watch` reconstruit automatiquement à chaque sauvegarde.
-
-**Option 3 : PowerShell seul.**
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build.ps1
-```
-
-C'est le fichier `dist/Mapping_NAV_BC.html` qu'il faut distribuer aux utilisateurs.
-
-## Points d'attention
-
-**Ne jamais réécrire le package avec une librairie Excel.** Le package BC contient un mappage XML (`xl/xmlMaps.xml`), des tables de type `xml`, des cellules uniques liées (`tableSingleCells`) et des commentaires de type par champ. Excel, openpyxl ou SheetJS perdent ou altèrent ces parties. Pour l'éviter, `06-generate.js` ne modifie que quatre choses :
-
-- la zone `<sheetData>` des feuilles concernées (lignes d'en-tête 1 à 3 conservées) ;
-- `<dimension>` ;
-- les attributs `ref` des tables et de leur `autoFilter` ;
-- `xl/sharedStrings.xml`, reconstruit entièrement, avec les index des feuilles non modifiées renumérotés.
-
-Toutes les autres parties de l'archive sont recopiées à l'identique.
-
-**Types des champs.** Ils sont lus dans les commentaires de la ligne 3 du package, que BC y place à l'export (`Code20`, `Text100`, `Option` suivi de la liste `0: …`). Si un package n'a pas de commentaires, les champs sont traités comme du texte sans limite de longueur.
-
-**Format des valeurs écrites** (identique aux exports BC) : toutes les valeurs sont écrites en texte partagé. Les dates sont au format `AAAA-MM-JJ`, les décimaux utilisent un point, les booléens valent `true`/`false` et les options sont écrites par leur libellé.
-
-**Valeurs par défaut.** Pour les types Boolean, Option, Decimal, Integer et Media, la valeur par défaut est la valeur majoritaire (au moins 60 %) observée dans les lignes déjà présentes dans le package, sinon la valeur neutre du type. Le code est dans `loadPackage`.
-
-**Sauvegarde locale.** Le navigateur associe `localStorage` au fichier ouvert. Si vous déplacez ou renommez le fichier HTML, le dernier mapping n'est plus restauré automatiquement. Pour cette raison, exportez vos modèles en JSON.
-
-**Mettre à jour JSZip.** Remplacez `vendor/jszip.min.js` par la version `dist/jszip.min.js` du paquet npm `jszip`, puis recompilez.
-
-## Format du fichier de mapping (JSON)
-
-```json
-{
-  "app": "nav-bc-mapper",
-  "version": 1,
-  "settings": { "fillDefaults": true, "truncate": true, "skipEmpty": true, "upperCode": true },
-  "tables": {
-    "156 Ressource": {
-      "source": "Ressources",
-      "headerRow": 1,
-      "mode": "replace",
-      "fields": {
-        "N°":   { "kind": "col", "col": "N°", "padLen": 7, "padChar": "0", "padNum": true },
-        "Type": { "kind": "col", "col": "Type", "map": [["Homme", "Personne"], ["Femme", "Personne"]] },
-        "Nom de recherche": { "kind": "tpl", "tpl": "{Nom} {Prénom}", "case": "upper" }
-      }
-    }
-  }
-}
-```
-
-Les clés suivent ces conventions :
-
-- **Tables :** nom de l'onglet du package.
-- **Champs :** libellé de la ligne 3 du package. Un libellé en double est suffixé ` (2)`.
-- **Colonnes source :** texte de la ligne d'en-tête Navision.
-- **`kind` :** `col`, `const` (avec `value`), `tpl` (avec `tpl`) ou `none`.
-- **`mode` :** `replace`, `append` ou `keep`.
-- **`case` :** `none`, `upper`, `lower` ou `title`.
-
-Les autres propriétés d'un champ sont `prefix`, `suffix` et `dflt` (valeur si vide).
-
-L'ordre d'application sur chaque valeur est le suivant :
-
-1. suppression des espaces ;
-2. correspondance de valeurs ;
-3. valeur si vide ;
-4. casse ;
-5. remplissage à gauche ;
-6. préfixe et suffixe ;
-7. conversion au type BC et contrôle de longueur.
-
-## Vérification après modification
-
-1. Chargez un export Navision et un package, puis vérifiez que le mapping automatique et les compteurs d'anomalies sont cohérents.
-2. Générez le package, puis ouvrez-le dans Excel : aucun message de réparation ne doit apparaître et les en-têtes et commentaires doivent être intacts.
-3. Dans BC, sur un environnement de test, allez dans *Packages de configuration*, lancez *Importer d'Excel* et contrôlez les erreurs dans *Données du package*.
-4. Exportez le mapping, rechargez la page, réimportez-le et vérifiez que le résultat est identique.
+C'est ce fichier qu'il faut distribuer aux utilisateurs. Pendant le développement, `src/index.html` s'ouvre aussi directement dans le navigateur.
