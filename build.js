@@ -1,9 +1,9 @@
-// Assemble src/index.html en un fichier HTML unique : node build.js -> dist/Mapping_NAV_BC.html
+// Assemble src/index.html en un fichier HTML unique : node build.js -> dist/nav-2-bc.html
 const fs = require('fs');
 const path = require('path');
 
 const src = path.join(__dirname, 'src');
-const out = path.join(__dirname, 'dist', 'Mapping_NAV_BC.html');
+const out = path.join(__dirname, 'dist', 'nav-2-bc.html');
 const read = rel => fs.readFileSync(path.join(src, rel), 'utf8');
 
 const html = read('index.html')

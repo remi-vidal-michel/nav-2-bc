@@ -2,7 +2,7 @@
 
 Cet outil remplit un package de configuration Business Central (fichier Excel) avec les données d'un export Navision. Vous indiquez quelle colonne Navision alimente chaque champ BC, vous corrigez les valeurs si besoin, puis vous téléchargez le package prêt à importer.
 
-L'outil tient dans un seul fichier, `Mapping_NAV_BC.html`. Il s'ouvre par double-clic dans Edge ou Chrome, sans installation ni connexion. Les données restent sur votre ordinateur.
+L'outil tient dans un seul fichier, `nav-2-bc.html`. Il s'ouvre par double-clic dans Edge ou Chrome, sans installation ni connexion. Les données restent sur votre ordinateur.
 
 ## Ce qu'il vous faut
 
@@ -108,7 +108,7 @@ Les valeurs sont écrites comme dans un export BC : dates au format `AAAA-MM-JJ`
 
 ## Construire le fichier HTML
 
-Le code source se trouve dans `src/`. Pour produire `dist/Mapping_NAV_BC.html`, lancez avec Node.js :
+Le code source se trouve dans `src/`. Pour produire `dist/nav-2-bc.html`, lancez avec Node.js :
 
 ```
 node build.js
