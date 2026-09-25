@@ -137,22 +137,21 @@ function renderPreview() {
   const fns = t.fields.map(f => compileField(t, f, getF(t, f), ctx));
   const text = r => String(r.e && r.v === '' ? (r.input ?? '') : r.v);
   // lignes : celles qui contiennent la recherche dans une valeur, sinon toutes
-  const shown = []; const hitCol = new Set(); let hits = 0;
+  const shown = []; let hits = 0;
   if (q) for (let i = 0; i < ctx.rows.length; i++) {
-    const rs = fns.map(fn => fn(ctx.rows[i])); let hit = false;
-    rs.forEach((r, c) => { if (text(r).toLowerCase().includes(q)) { hit = true; hitCol.add(c); } });
-    if (hit && ++hits <= N) shown.push([i, rs]);
+    const rs = fns.map(fn => fn(ctx.rows[i]));
+    if (rs.some(r => text(r).toLowerCase().includes(q)) && ++hits <= N) shown.push([i, rs]);
   }
   if (!hits) for (let i = 0; i < Math.min(N, ctx.rows.length); i++) shown.push([i, fns.map(fn => fn(ctx.rows[i]))]);
-  // colonnes : celles dont le nom correspond ou qui contiennent la valeur cherchée (la clé reste affichée)
+  // colonnes : toutes affichées, celles dont le nom correspond sont surlignées
   const nameHit = c => !!nq && (norm(t.fields[c].caption).includes(nq) || norm(getF(t, t.fields[c])?.col || '').includes(nq));
-  const cols = t.fields.map((f, c) => c).filter(c => !q || c === 0 || hitCol.has(c) || nameHit(c));
+  const cols = t.fields.map((f, c) => c);
   if (q && !hits && !cols.some(nameHit)) { wrap.innerHTML = `<div class="empty">Aucun champ ni aucune valeur ne correspond à « ${esc(S.ui.q.trim())} ».</div>`; return; }
   const vq = hits ? q : '';
   let h = `<table class="ptable"><thead><tr><th class="rn">Ligne</th>${cols.map(c => { const f = t.fields[c];
-    return `<th data-k="${esc(f.key)}" class="${isMapped(getF(t, f)) ? '' : 'unm'}" title="${esc(f.caption)} : cliquer pour régler ce champ">${markText(f.caption, nameHit(c) ? q : '')}<small>${esc(typeLabel(f.type))}</small></th>`; }).join('')}</tr></thead><tbody>`;
+    return `<th data-k="${esc(f.key)}" class="${isMapped(getF(t, f)) ? '' : 'unm'}${nameHit(c) ? ' qhit' : ''}" title="${esc(f.caption)} : cliquer pour régler ce champ">${markText(f.caption, nameHit(c) ? q : '')}<small>${esc(typeLabel(f.type))}</small></th>`; }).join('')}</tr></thead><tbody>`;
   for (const [i, rs] of shown) {
-    h += `<tr><td class="rn">${ctx.rowNums[i]}</td>`;
+    h += `<tr data-r="${ctx.rowNums[i]}"${ctx.rowNums[i] === S.ui.row ? ' class="rsel"' : ''}><td class="rn">${ctx.rowNums[i]}</td>`;
     for (const c of cols) { const r = rs[c]; const cl = r.e ? 'err' : r.w ? 'warn' : r.d ? 'def' : ''; h += `<td class="${cl}" title="${esc(r.e || r.w || r.v)}">${markText(text(r), vq)}</td>`; }
     h += '</tr>';
   }
@@ -441,14 +440,14 @@ function selectField(key, focusRow = true) {
   if (row) { row.scrollIntoView({ block: 'nearest' }); if (focusRow) row.focus({ preventScroll: true }); }
 }
 /* chaque table garde son affichage : mode, filtre, recherche, champ sélectionné et défilement */
-const VIEW_KEYS = ['tab', 'filter', 'q', 'f'];
+const VIEW_KEYS = ['tab', 'filter', 'q', 'f', 'row'];
 function switchTable(i) {
   if (i === S.ui.t) return;
   const w = $('#gridwrap');
   S.ui.views[curT().name] = { ...Object.fromEntries(VIEW_KEYS.map(k => [k, S.ui[k]])), top: w?.scrollTop || 0, left: w?.scrollLeft || 0 };
   S.ui.t = i;
   const v = S.ui.views[curT().name] || {};
-  Object.assign(S.ui, { tab: 'map', filter: 'all', q: '', f: null }, Object.fromEntries(VIEW_KEYS.filter(k => k in v).map(k => [k, v[k]])));
+  Object.assign(S.ui, { tab: 'map', filter: 'all', q: '', f: null, row: null }, Object.fromEntries(VIEW_KEYS.filter(k => k in v).map(k => [k, v[k]])));
   closePicker(); renderAll();
   const w2 = $('#gridwrap'); if (w2 && v.top != null) { w2.scrollTop = v.top; w2.scrollLeft = v.left; }
 }
@@ -513,6 +512,8 @@ function bindApp() {
     const t = curT(); const T = tm(t);
     const tab = e.target.closest('[data-tab]'); if (tab) { S.ui.tab = tab.dataset.tab; renderCenter(); markPreviewCol(true); return; }
     const th = e.target.closest('.ptable th[data-k]'); if (th) { selectField(th.dataset.k, false); return; }
+    const tr = e.target.closest('.ptable tbody tr'); // sélection de ligne, purement visuelle
+    if (tr) { S.ui.row = +tr.dataset.r; $$('.ptable tr.rsel').forEach(x => x.classList.remove('rsel')); tr.classList.add('rsel'); return; }
     const flt = e.target.closest('[data-filter]'); if (flt) { S.ui.filter = flt.dataset.filter; $$('#segFilter button').forEach(b => b.setAttribute('aria-pressed', b === flt)); renderGrid(); return; }
     if (e.target.closest('#btnAuto')) {
       const n = autoMapTable(t); validateTable(t); renderAll(); autosave();

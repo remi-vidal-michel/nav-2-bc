@@ -58,7 +58,7 @@ Sélectionnez un champ pour ouvrir le panneau de droite. Vous pouvez :
 
 Sous la source, le panneau affiche les lignes en anomalie puis, pour toutes les lignes, la valeur source et le résultat dans une liste défilante ; les lignes en alerte y sont surlignées en jaune, celles en erreur en rouge. Ces sections se replient d'un clic sur leur titre. Repliées, elles gardent l'essentiel en résumé : le nombre d'anomalies, la mise en forme appliquée ou le nombre de lignes.
 
-Le mode **Aperçu du résultat** montre la table telle qu'elle sera écrite dans le package. La colonne du champ sélectionné y est mise en évidence. Cliquez sur un en-tête de colonne pour régler ce champ. Dans ce mode, **Rechercher** porte à la fois sur les noms des champs et des colonnes, et sur les valeurs : seules les lignes qui contiennent le texte cherché sont affichées, avec les colonnes concernées.
+Le mode **Aperçu du résultat** montre la table telle qu'elle sera écrite dans le package. La colonne du champ sélectionné y est mise en évidence. Cliquez sur un en-tête de colonne pour régler ce champ. Dans ce mode, **Rechercher** ne garde que les lignes qui contiennent le texte cherché. Toutes les colonnes restent affichées : les valeurs trouvées et les noms de champs ou de colonnes correspondants sont surlignés. Un clic sur une ligne la met en évidence, pour la suivre plus facilement à l'écran.
 
 ### 5. Filtrer les lignes
 

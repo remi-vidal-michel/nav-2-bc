@@ -173,6 +173,12 @@ main.center{display:flex;flex-direction:column;min-width:0;min-height:0;backgrou
 .ptable th.hl{background:var(--acc-soft);box-shadow:inset 0 -2px 0 var(--acc)}
 .ptable td.hl{box-shadow:inset 1px 0 0 var(--acc-line),inset -1px 0 0 var(--acc-line)}
 .ptable td.hl:not(.err):not(.warn){background:var(--acc-soft)}
+.ptable th.qhit{color:var(--ink)}
+.ptable tbody tr{cursor:pointer}
+.ptable tbody tr:hover td:not(.err):not(.warn){background:var(--line2)}
+.ptable tbody tr.rsel td{box-shadow:inset 0 1px 0 var(--acc-line),inset 0 -1px 0 var(--acc-line)}
+.ptable tbody tr.rsel td:not(.err):not(.warn){background:var(--acc-soft)}
+.ptable tbody tr.rsel td.rn{color:var(--ink);font-weight:600;box-shadow:inset 3px 0 0 var(--acc),inset 0 1px 0 var(--acc-line),inset 0 -1px 0 var(--acc-line)}
 mark{background:rgba(255,214,0,.4);color:inherit;border-radius:2px}
 
 /* inspector */

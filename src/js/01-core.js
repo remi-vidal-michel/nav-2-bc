@@ -13,7 +13,7 @@ const S = {
   pkg: null,      // {fileName, zip, tables:[...], sst:[], sstPath, orig:{}}
   map: null,      // modèle de mapping courant
   // open : sections du panneau de droite ouvertes ou fermées ; views : affichage mémorisé par table
-  ui: { t: 0, f: null, filter: 'all', q: '', tab: 'map', open: {}, views: {} },
+  ui: { t: 0, f: null, filter: 'all', q: '', tab: 'map', row: null, open: {}, views: {} },
   clip: null,     // format copié
   val: {},        // résultats de contrôle par table
 };
