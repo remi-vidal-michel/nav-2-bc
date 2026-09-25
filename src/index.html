@@ -33,7 +33,7 @@
 
 <div id="app" class="hidden">
   <header class="top">
-    <div class="brand"><span class="mark"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 5h8M7 2l3 3-3 3M14 11H6M9 8l-3 3 3 3"/></svg></span>NAV vers BC</div>
+    <div class="brand"><span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg></span>NAV vers BC</div>
     <div class="filechip" id="chipRaw" title="Remplacer l'export Navision"><b>Navision</b><span></span></div>
     <div class="filechip" id="chipPkg" title="Remplacer le package BC"><b>Package</b><span></span></div>
     <div class="spacer"></div>
@@ -44,7 +44,9 @@
   </header>
   <div class="work">
     <aside class="tables" id="tables"></aside>
+    <div class="sash" data-side="l" role="separator" aria-orientation="vertical" aria-label="Largeur de la liste des tables" tabindex="0"></div>
     <main class="center" id="center"></main>
+    <div class="sash" data-side="r" role="separator" aria-orientation="vertical" aria-label="Largeur du panneau de détail" tabindex="0"></div>
     <aside class="insp" id="insp"></aside>
   </div>
 </div>

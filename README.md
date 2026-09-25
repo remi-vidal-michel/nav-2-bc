@@ -18,6 +18,8 @@ Sur l'écran d'accueil, déposez ou sélectionnez l'export Navision puis le pack
 
 Pour remplacer un fichier plus tard, cliquez sur son nom en haut de l'écran.
 
+L'espace de travail comporte trois panneaux : les tables à gauche, les correspondances au centre, le détail du champ à droite. Faites glisser l'espace entre deux panneaux pour les élargir. Un double-clic rétablit la largeur par défaut.
+
 ### 2. Choisir la source de chaque table
 
 La colonne de gauche liste les tables du package, avec une barre indiquant la part de champs alimentés. Pour chaque table, choisissez :
@@ -62,7 +64,7 @@ L'onglet **Aperçu du résultat** montre la table telle qu'elle sera écrite dan
 
 Par défaut, toutes les lignes de la feuille Navision sont reprises. Pour n'en garder qu'une partie, utilisez la colonne **Filtre** d'un champ alimenté par une colonne ou une combinaison :
 
-1. Cliquez sur le bouton **Toutes** du champ. La liste des valeurs présentes s'ouvre, avec leur nombre d'occurrences.
+1. Cliquez sur le bouton à entonnoir du champ. La liste des valeurs présentes s'ouvre, avec leur nombre d'occurrences.
 2. Cochez les valeurs à conserver. La zone **Rechercher…** réduit la liste, **Effacer** retire le filtre.
 
 Le bouton affiche alors les valeurs retenues. Si plusieurs champs sont filtrés, une ligne n'est conservée que si elle passe tous les filtres. Le nombre de lignes retenues apparaît sous le titre de la table. Les contrôles, l'aperçu et le package généré ne tiennent compte que de ces lignes.

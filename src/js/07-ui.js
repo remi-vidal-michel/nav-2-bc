@@ -6,7 +6,7 @@ const ICON_CHEV = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" st
 const ICON_SEARCH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
 const ICON_FUNNEL = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 3h12l-4.5 5.5V13l-3 1.5v-6L2 3z"/></svg>';
 function curT() { return S.pkg.tables[S.ui.t]; }
-function typeLabel(ty) { return ty.base + (ty.len ? ' ' + ty.len : ''); }
+function typeLabel(ty) { return ty.base + (ty.len ? `[${ty.len}]` : ''); }
 function renderAll() { renderTables(); renderCenter(); renderInspector(); renderChips(); }
 function renderChips() {
   $('#chipRaw span').textContent = S.raw?.fileName || '—';
@@ -84,7 +84,7 @@ function fieldRowHTML(t, f) {
   const fl = filterActive(F) ? filterLabel(F.filter) : '';
   const flt = !canFilter(F) ? '' : fl
     ? `<button class="srcbtn fltbtn on" data-flt="${esc(f.key)}" title="Lignes conservées : ${esc(F.filter.map(v => v === '' ? '(vide)' : v).join(', '))}">${ICON_FUNNEL}<span>${esc(fl)}</span>${ICON_CHEV}</button>`
-    : `<button class="srcbtn fltbtn" data-flt="${esc(f.key)}" title="Filtrer les lignes sur les valeurs de ce champ">${ICON_FUNNEL}<span>Toutes</span>${ICON_CHEV}</button>`;
+    : `<button class="srcbtn fltbtn" data-flt="${esc(f.key)}" title="Filtrer les lignes sur les valeurs de ce champ">${ICON_FUNNEL}<span></span>${ICON_CHEV}</button>`;
   const st = [V.err ? `<span class="pill err" title="Lignes en erreur">${nf(V.err)}</span>` : '', V.warn ? `<span class="pill warn" title="Lignes avec alerte">${nf(V.warn)}</span>` : ''].join('');
   return `<div class="grow frow${m ? ' mapped' : ''}${sel ? ' sel' : ''}" data-k="${esc(f.key)}" tabindex="${sel ? 0 : -1}">
     <div><span class="fcap" title="${esc(f.caption)}">${esc(f.caption)}</span><span class="ftype"><code>${f.L}</code> ${esc(typeLabel(f.type))}${f.i === 0 ? '<span class="key">clé</span>' : ''}</span></div>
@@ -385,8 +385,37 @@ function selectField(key, focusRow = true) {
 function validateAll() { S.val = {}; for (const t of S.pkg.tables) validateTable(t); }
 function changeTableSource(t) { ctxCache.clear(); validateTable(t); renderTables(); renderCenter(); renderInspector(); autosave(); }
 
+/* ----- îlots redimensionnables (largeurs propres au navigateur) ----- */
+const LAYOUT_KEY = 'navbc.layout';
+const PANES = { l: { min: 170, max: 480 }, r: { min: 280, max: 720 } };
+function bindSashes() {
+  const app = $('#app'); let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}'); } catch { }
+  const width = side => $(side === 'l' ? '#tables' : '#insp').getBoundingClientRect().width;
+  const set = (side, w) => { const p = PANES[side]; app.style.setProperty('--w' + side, Math.round(Math.max(p.min, Math.min(p.max, w))) + 'px'); };
+  const save = () => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({ l: width('l'), r: width('r') })); } catch { } };
+  for (const side in PANES) if (saved[side]) set(side, saved[side]);
+  for (const el of $$('.sash')) {
+    const side = el.dataset.side; const dir = side === 'l' ? 1 : -1;
+    el.addEventListener('pointerdown', e => {
+      e.preventDefault(); closePicker(); el.setPointerCapture(e.pointerId);
+      el.classList.add('drag'); document.body.classList.add('resizing');
+      const x0 = e.clientX, w0 = width(side);
+      const move = ev => set(side, w0 + dir * (ev.clientX - x0));
+      el.addEventListener('pointermove', move);
+      el.addEventListener('pointerup', () => { el.removeEventListener('pointermove', move); el.classList.remove('drag'); document.body.classList.remove('resizing'); save(); }, { once: true });
+    });
+    el.addEventListener('dblclick', () => { app.style.removeProperty('--w' + side); save(); });
+    el.addEventListener('keydown', e => {
+      const k = { ArrowLeft: -1, ArrowRight: 1 }[e.key]; if (!k) return;
+      set(side, width(side) + dir * k * 20); save(); e.preventDefault();
+    });
+  }
+}
+
 /* ---------------- événements ---------------- */
 function bindApp() {
+  bindSashes();
   $('#tables').addEventListener('click', e => {
     const b = e.target.closest('.titem'); if (!b) return;
     S.ui.t = +b.dataset.t; S.ui.f = null; S.ui.q = ''; closePicker(); renderAll();
@@ -509,7 +538,7 @@ function openSettings() {
     <div class="seg" id="segTheme">${[['light', 'Clair'], ['dark', 'Sombre'], ['auto', "Suivre l'appareil"]].map(([k, l]) => `<button data-th="${k}" aria-pressed="${theme === k}">${l}</button>`).join('')}</div>
     <h4>Génération</h4><div class="sub">Enregistrées avec le mapping.</div>
     ${opt('setDef', s.fillDefaults, 'Compléter les champs vides avec les valeurs par défaut BC', 'false, 0, première option… déduits des lignes déjà présentes dans le package. Évite les erreurs de validation à l\'import.')}
-    ${opt('setTrunc', s.truncate, 'Tronquer les valeurs trop longues', 'Sinon, la valeur est signalée en erreur. La longueur maximale vient du type du champ (Code20, Text100…).')}
+    ${opt('setTrunc', s.truncate, 'Tronquer les valeurs trop longues', 'Sinon, la valeur est signalée en erreur. La longueur maximale vient du type du champ (Code[20], Text[100]…).')}
     ${opt('setUpper', s.upperCode, 'Mettre en majuscules les champs de type Code', 'Business Central stocke toujours les codes en majuscules.')}
     ${opt('setSkip', s.skipEmpty, 'Ignorer les lignes entièrement vides de la source', 'Utile pour les exports avec lignes de séparation.')}
     <div class="actions"><button class="btn" id="setCancel">Annuler</button><button class="btn primary" id="setOk">Appliquer</button></div>`;
