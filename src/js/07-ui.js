@@ -45,7 +45,7 @@ function renderCenter() {
     <div class="facts" id="facts">${factsHTML(t)}</div>
   </div>
   <div class="toolbar">
-    <div class="tabs" role="tablist">
+    <div class="seg" role="tablist">
       <button role="tab" data-tab="map" aria-selected="${S.ui.tab === 'map'}">Correspondances</button>
       <button role="tab" data-tab="prev" aria-selected="${S.ui.tab === 'prev'}">Aperçu du résultat</button>
     </div>
@@ -53,7 +53,7 @@ function renderCenter() {
     <div class="seg" id="segFilter" ${S.ui.tab === 'map' ? '' : 'hidden'}>
       ${[['all', 'Tous'], ['mapped', 'Alimentés'], ['unmapped', 'Non alimentés'], ['issues', 'Anomalies']].map(([k, l]) => `<button data-filter="${k}" aria-pressed="${S.ui.filter === k}">${l}</button>`).join('')}
     </div>
-    <label class="search" ${S.ui.tab === 'map' ? '' : 'hidden'}>${ICON_SEARCH}<input type="search" id="inSearch" placeholder="Rechercher" aria-label="Rechercher un champ ou une colonne" value="${esc(S.ui.q)}"></label>
+    <label class="search">${ICON_SEARCH}<input type="search" id="inSearch" placeholder="Rechercher" aria-label="${S.ui.tab === 'map' ? 'Rechercher un champ ou une colonne' : 'Rechercher un champ, une colonne ou une valeur'}" value="${esc(S.ui.q)}"></label>
   </div>
   <div class="gridwrap" id="gridwrap"></div>`;
   renderGrid();
@@ -117,20 +117,53 @@ function refreshRow(t, f) {
   const el = $(`.frow[data-k="${CSS.escape(f.key)}"]`); if (!el) return;
   const tmp = document.createElement('div'); tmp.innerHTML = fieldRowHTML(t, f); el.replaceWith(tmp.firstElementChild);
 }
+/* texte échappé, occurrences de q (en minuscules) surlignées */
+function markText(s, q) {
+  if (!q) return esc(s);
+  const low = s.toLowerCase(); let out = '', i = 0, j;
+  while ((j = low.indexOf(q, i)) >= 0) { out += esc(s.slice(i, j)) + '<mark>' + esc(s.slice(j, j + q.length)) + '</mark>'; i = j + q.length; }
+  return out + esc(s.slice(i));
+}
 function renderPreview() {
   const t = curT(); const ctx = tableCtx(t); const wrap = $('#gridwrap');
   if (!ctx) { wrap.innerHTML = `<div class="empty">Choisissez une feuille source pour voir les lignes qui seront générées.</div>`; return; }
-  const N = Math.min(200, ctx.rows.length);
+  const N = 200; const q = S.ui.q.trim().toLowerCase(); const nq = norm(S.ui.q);
   const fns = t.fields.map(f => compileField(t, f, getF(t, f), ctx));
-  let h = `<table class="ptable"><thead><tr><th>Ligne</th>${t.fields.map(f => `<th class="${isMapped(getF(t, f)) ? '' : 'unm'}" title="${esc(f.caption)}">${esc(f.caption)}<small>${esc(typeLabel(f.type))}</small></th>`).join('')}</tr></thead><tbody>`;
-  for (let i = 0; i < N; i++) {
+  const text = r => String(r.e && r.v === '' ? (r.input ?? '') : r.v);
+  // lignes : celles qui contiennent la recherche dans une valeur, sinon toutes
+  const shown = []; const hitCol = new Set(); let hits = 0;
+  if (q) for (let i = 0; i < ctx.rows.length; i++) {
+    const rs = fns.map(fn => fn(ctx.rows[i])); let hit = false;
+    rs.forEach((r, c) => { if (text(r).toLowerCase().includes(q)) { hit = true; hitCol.add(c); } });
+    if (hit && ++hits <= N) shown.push([i, rs]);
+  }
+  if (!hits) for (let i = 0; i < Math.min(N, ctx.rows.length); i++) shown.push([i, fns.map(fn => fn(ctx.rows[i]))]);
+  // colonnes : celles dont le nom correspond ou qui contiennent la valeur cherchée (la clé reste affichée)
+  const nameHit = c => !!nq && (norm(t.fields[c].caption).includes(nq) || norm(getF(t, t.fields[c])?.col || '').includes(nq));
+  const cols = t.fields.map((f, c) => c).filter(c => !q || c === 0 || hitCol.has(c) || nameHit(c));
+  if (q && !hits && !cols.some(nameHit)) { wrap.innerHTML = `<div class="empty">Aucun champ ni aucune valeur ne correspond à « ${esc(S.ui.q.trim())} ».</div>`; return; }
+  const vq = hits ? q : '';
+  let h = `<table class="ptable"><thead><tr><th class="rn">Ligne</th>${cols.map(c => { const f = t.fields[c];
+    return `<th data-k="${esc(f.key)}" class="${isMapped(getF(t, f)) ? '' : 'unm'}" title="${esc(f.caption)} : cliquer pour régler ce champ">${markText(f.caption, nameHit(c) ? q : '')}<small>${esc(typeLabel(f.type))}</small></th>`; }).join('')}</tr></thead><tbody>`;
+  for (const [i, rs] of shown) {
     h += `<tr><td class="rn">${ctx.rowNums[i]}</td>`;
-    for (const fn of fns) { const r = fn(ctx.rows[i]); const c = r.e ? 'err' : r.w ? 'warn' : r.d ? 'def' : ''; h += `<td class="${c}" title="${esc(r.e || r.w || r.v)}">${esc(r.e && r.v === '' ? r.input : r.v)}</td>`; }
+    for (const c of cols) { const r = rs[c]; const cl = r.e ? 'err' : r.w ? 'warn' : r.d ? 'def' : ''; h += `<td class="${cl}" title="${esc(r.e || r.w || r.v)}">${markText(text(r), vq)}</td>`; }
     h += '</tr>';
   }
   h += '</tbody></table>';
-  if (ctx.rows.length > N) h += `<div class="empty">Aperçu limité aux ${N} premières lignes sur ${nf(ctx.rows.length)}.</div>`;
+  if (hits) h += `<div class="empty">${plural(hits, 'ligne contient', 'lignes contiennent')} « ${esc(S.ui.q.trim())} »${hits > N ? `, ${N} premières affichées` : ''}.</div>`;
+  else if (ctx.rows.length > N) h += `<div class="empty">Aperçu limité aux ${N} premières lignes sur ${nf(ctx.rows.length)}.</div>`;
   wrap.innerHTML = h;
+  markPreviewCol(false);
+}
+/* met en évidence la colonne du champ sélectionné, et la fait défiler au centre si demandé */
+function markPreviewCol(scroll) {
+  const wrap = $('#gridwrap'); if (!wrap || S.ui.tab !== 'prev') return;
+  $$('.ptable .hl', wrap).forEach(x => x.classList.remove('hl'));
+  const th = S.ui.f && wrap.querySelector(`th[data-k="${CSS.escape(S.ui.f)}"]`); if (!th) return;
+  const c = th.cellIndex; th.classList.add('hl');
+  for (const tr of wrap.querySelectorAll('tbody tr')) tr.cells[c]?.classList.add('hl');
+  if (scroll) { const w = wrap.getBoundingClientRect(), r = th.getBoundingClientRect(); wrap.scrollLeft += r.left - w.left - (w.width - r.width) / 2; }
 }
 
 /* ----- inspecteur ----- */
@@ -218,9 +251,11 @@ function refreshInspectorLive() {
   const sp = $('#secPrev'); const si = $('#secIssues'); if (!sp) return;
   if (!ctx) { sp.innerHTML = `<h4>Aperçu</h4><div class="note">Choisissez d'abord une feuille source pour cette table.</div>`; si.innerHTML = ''; return; }
   const fn = compileField(t, f, F, ctx);
-  const picks = []; for (let i = 0; i < ctx.rows.length && picks.length < 8; i++) { const r = fn(ctx.rows[i]); if (r.input || picks.length < 3 || !isMapped(F)) picks.push([ctx.rowNums[i], r]); }
-  sp.innerHTML = `<h4>Aperçu <span class="hint">ligne, source, résultat</span></h4><table class="samples">${picks.map(([n, r]) =>
-    `<tr><td class="rn">${n}</td><td class="in" title="${esc(r.input ?? '')}">${esc(r.input === undefined ? '' : (r.input || '∅'))}</td><td class="${r.e ? 'bad' : r.d ? 'def' : ''}" title="${esc(r.e || r.w || r.v)}">${esc(r.v === '' ? '∅' : r.v)}${r.w ? ' ⚠' : ''}</td></tr>`).join('')}</table>`;
+  let rows = '';
+  for (let i = 0; i < ctx.rows.length; i++) { const r = fn(ctx.rows[i]);
+    rows += `<tr><td class="rn">${ctx.rowNums[i]}</td><td class="in" title="${esc(r.input ?? '')}">${esc(r.input === undefined ? '' : (r.input || '∅'))}</td><td class="${r.e ? 'bad' : r.d ? 'def' : ''}" title="${esc(r.e || r.w || r.v)}">${esc(r.v === '' ? '∅' : r.v)}${r.w ? ' ⚠' : ''}</td></tr>`; }
+  sp.innerHTML = `<h4>Aperçu <span class="hint">${plural(ctx.rows.length, 'ligne')}</span></h4>
+    <div class="samples-wrap"><table class="samples"><thead><tr><th>Ligne</th><th>Source</th><th>Résultat</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   if (V.err || V.warn) {
     si.innerHTML = `<h4>Anomalies <span class="hint">${[V.err && plural(V.err, 'erreur'), V.warn && plural(V.warn, 'alerte')].filter(Boolean).join(', ')}</span></h4>
       <ul class="issues">${V.ex.map(x => `<li><b style="color:var(--${x.lvl === 'err' ? 'err' : 'warn'})">${x.row ? 'Ligne ' + x.row : 'Champ'}</b> : ${esc(x.msg)}</li>`).join('')}</ul>`;
@@ -367,7 +402,7 @@ function setField(t, f, patch, full) {
 }
 function afterFieldChange(t, f, full) {
   validateTable(t, f.key);
-  refreshRow(t, f);
+  if (S.ui.tab === 'prev') renderGrid(); else refreshRow(t, f);
   renderTables();
   if (full) renderInspector(); else refreshInspectorLive();
   refreshFacts(t);
@@ -379,6 +414,7 @@ function selectField(key, focusRow = true) {
   S.ui.f = key;
   $$('.frow').forEach(r => { const on = r.dataset.k === key; r.classList.toggle('sel', on); r.tabIndex = on ? 0 : -1; });
   renderInspector();
+  markPreviewCol(false);
   const row = $(`.frow[data-k="${CSS.escape(key)}"]`);
   if (row) { row.scrollIntoView({ block: 'nearest' }); if (focusRow) row.focus({ preventScroll: true }); }
 }
@@ -441,7 +477,8 @@ function bindApp() {
   });
   center.addEventListener('click', e => {
     const t = curT(); const T = tm(t);
-    const tab = e.target.closest('[data-tab]'); if (tab) { S.ui.tab = tab.dataset.tab; renderCenter(); return; }
+    const tab = e.target.closest('[data-tab]'); if (tab) { S.ui.tab = tab.dataset.tab; renderCenter(); markPreviewCol(true); return; }
+    const th = e.target.closest('.ptable th[data-k]'); if (th) { selectField(th.dataset.k, false); return; }
     const flt = e.target.closest('[data-filter]'); if (flt) { S.ui.filter = flt.dataset.filter; $$('#segFilter button').forEach(b => b.setAttribute('aria-pressed', b === flt)); renderGrid(); return; }
     if (e.target.closest('#btnAuto')) {
       const n = autoMapTable(t); validateTable(t); renderAll(); autosave();

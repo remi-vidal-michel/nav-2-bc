@@ -33,7 +33,7 @@ La colonne de gauche liste les tables du package, avec une barre indiquant la pa
 
 ### 3. Associer les champs
 
-Dans l'onglet **Correspondances**, chaque ligne est un champ BC. Cliquez sur la source pour choisir une colonne Navision.
+En mode **Correspondances**, chaque ligne est un champ BC. Cliquez sur la source pour choisir une colonne Navision.
 
 **Mapper automatiquement** associe les colonnes dont le nom correspond. Une association proposée par simple ressemblance est marquée « à vérifier » : confirmez-la ou changez-la.
 
@@ -56,9 +56,9 @@ Sélectionnez un champ pour ouvrir le panneau de droite. Vous pouvez :
 - **Mettre en forme** : compléter à gauche jusqu'à une longueur (par exemple `42` devient `0000042`), ajouter un préfixe ou un suffixe, changer la casse, définir une valeur si la source est vide.
 - **Copier et coller la mise en forme** d'un champ à l'autre.
 
-Le panneau affiche aussi un aperçu des valeurs avant et après transformation, et la liste des lignes en anomalie.
+Le panneau affiche aussi, pour toutes les lignes, la valeur source et le résultat dans une liste défilante, puis les lignes en anomalie.
 
-L'onglet **Aperçu du résultat** montre la table telle qu'elle sera écrite dans le package.
+Le mode **Aperçu du résultat** montre la table telle qu'elle sera écrite dans le package. La colonne du champ sélectionné y est mise en évidence. Cliquez sur un en-tête de colonne pour régler ce champ. Dans ce mode, **Rechercher** porte à la fois sur les noms des champs et des colonnes, et sur les valeurs : seules les lignes qui contiennent le texte cherché sont affichées, avec les colonnes concernées.
 
 ### 5. Filtrer les lignes
 
