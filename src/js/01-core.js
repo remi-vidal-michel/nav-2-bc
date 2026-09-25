@@ -37,6 +37,13 @@ const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = se
 const nf = n => n.toLocaleString('fr-FR');
 const plural = (n, s, p) => `${nf(n)} ${n > 1 ? (p || s + 's') : s}`;
 
+/* thème : clair, sombre ou celui de l'appareil ; préférence propre au navigateur */
+const THEME_KEY = 'navbc.theme';
+function getTheme() { try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch { return 'auto'; } }
+function applyTheme(v) { if (v === 'light' || v === 'dark') document.documentElement.dataset.theme = v; else delete document.documentElement.dataset.theme; }
+function setTheme(v) { try { localStorage.setItem(THEME_KEY, v); } catch { } applyTheme(v); }
+applyTheme(getTheme());
+
 function toast(msg, opts = {}) {
   const el = document.createElement('div');
   el.className = 'toast' + (opts.err ? ' err' : '');

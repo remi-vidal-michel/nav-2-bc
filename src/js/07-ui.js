@@ -3,6 +3,8 @@
 
 /* ---------------- rendu ---------------- */
 const ICON_CHEV = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6l4 4 4-4"/></svg>';
+const ICON_SEARCH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
+const ICON_FUNNEL = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 3h12l-4.5 5.5V13l-3 1.5v-6L2 3z"/></svg>';
 function curT() { return S.pkg.tables[S.ui.t]; }
 function typeLabel(ty) { return ty.base + (ty.len ? ' ' + ty.len : ''); }
 function renderAll() { renderTables(); renderCenter(); renderInspector(); renderChips(); }
@@ -26,11 +28,7 @@ function renderTables() {
 }
 function renderCenter() {
   const t = curT(); const T = tm(t); const ctx = getCtx(T);
-  const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
   const sheets = S.raw.sheets.map(s => `<option value="${esc(s.name)}"${s.name === T.source ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
-  const K = S.val[t.name]?.keys;
-  const mode = effectiveMode(t);
-  const keyNote = K && mode !== 'keep' && (K.dup || K.empty) ? `<span style="color:var(--err)"><b style="color:inherit">Clé ${esc(t.fields[0].caption)}</b> : ${[K.dup && plural(K.dup, 'doublon'), K.empty && plural(K.empty, 'valeur vide', 'valeurs vides')].filter(Boolean).join(', ')}</span>` : '';
   $('#center').innerHTML = `
   <div class="thead">
     <h2>${esc(t.name)} <small>Table ${esc(t.tableId)} ${t.tableCaption ? '(' + esc(t.tableCaption) + ')' : ''}, package ${esc(t.pkgCode)}</small></h2>
@@ -44,13 +42,7 @@ function renderCenter() {
       <button class="btn" id="btnAuto" ${ctx ? '' : 'disabled'} title="Associe les colonnes dont le nom correspond">Mapper automatiquement</button>
       <button class="btn ghost" id="btnClear" title="Retirer toutes les correspondances de cette table">Tout effacer</button>
     </div>
-    <div class="facts">
-      <span><b>${ctx ? nf(ctx.rows.length) : 0}</b> lignes source</span>
-      <span><b>${nf(t.existing.length)}</b> lignes déjà dans le package</span>
-      <span><b>${mapped}</b> / ${t.fields.length} champs alimentés</span>
-      ${mode === 'keep' && T.source ? '<span>Cette table sera recopiée telle quelle.</span>' : ''}
-      ${keyNote}
-    </div>
+    <div class="facts" id="facts">${factsHTML(t)}</div>
   </div>
   <div class="toolbar">
     <div class="tabs" role="tablist">
@@ -61,10 +53,21 @@ function renderCenter() {
     <div class="seg" id="segFilter" ${S.ui.tab === 'map' ? '' : 'hidden'}>
       ${[['all', 'Tous'], ['mapped', 'Alimentés'], ['unmapped', 'Non alimentés'], ['issues', 'Anomalies']].map(([k, l]) => `<button data-filter="${k}" aria-pressed="${S.ui.filter === k}">${l}</button>`).join('')}
     </div>
-    <input type="search" id="inSearch" placeholder="Rechercher un champ ou une colonne" value="${esc(S.ui.q)}" ${S.ui.tab === 'map' ? '' : 'hidden'}>
+    <label class="search" ${S.ui.tab === 'map' ? '' : 'hidden'}>${ICON_SEARCH}<input type="search" id="inSearch" placeholder="Rechercher" aria-label="Rechercher un champ ou une colonne" value="${esc(S.ui.q)}"></label>
   </div>
   <div class="gridwrap" id="gridwrap"></div>`;
   renderGrid();
+}
+function factsHTML(t) {
+  const T = tm(t); const ctx = tableCtx(t); const mode = effectiveMode(t);
+  const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
+  const K = S.val[t.name]?.keys;
+  const keyNote = K && mode !== 'keep' && (K.dup || K.empty) ? `<span style="color:var(--err)"><b style="color:inherit">Clé ${esc(t.fields[0].caption)}</b> : ${[K.dup && plural(K.dup, 'doublon'), K.empty && plural(K.empty, 'valeur vide', 'valeurs vides')].filter(Boolean).join(', ')}</span>` : '';
+  return `<span><b>${ctx ? nf(ctx.rows.length) : 0}</b> lignes source${ctx?.total !== undefined ? ` retenues sur ${nf(ctx.total)} (filtres)` : ''}</span>
+      <span><b>${nf(t.existing.length)}</b> lignes déjà dans le package</span>
+      <span><b>${mapped}</b> / ${t.fields.length} champs alimentés</span>
+      ${mode === 'keep' && T.source ? '<span>Cette table sera recopiée telle quelle.</span>' : ''}
+      ${keyNote}`;
 }
 function fieldRowHTML(t, f) {
   const F = getF(t, f); const V = S.val[t.name]?.fields[f.key] || {};
@@ -78,11 +81,16 @@ function fieldRowHTML(t, f) {
   const prev = m && V.sampleIn !== undefined
     ? `<span class="in" title="${esc(V.sampleIn)}">${esc(V.sampleIn || '∅')}</span><span class="arrow">→</span><span class="out ${outCls}" title="${esc(V.sampleOut)}">${esc(V.sampleOut === '' ? '∅' : V.sampleOut)}</span>`
     : `<span class="out def" title="Valeur écrite si le champ n'est pas alimenté">${S.map.settings.fillDefaults && f.dflt !== '' ? esc(f.dflt) : ''}</span>`;
+  const fl = filterActive(F) ? filterLabel(F.filter) : '';
+  const flt = !canFilter(F) ? '' : fl
+    ? `<button class="srcbtn fltbtn on" data-flt="${esc(f.key)}" title="Lignes conservées : ${esc(F.filter.map(v => v === '' ? '(vide)' : v).join(', '))}">${ICON_FUNNEL}<span>${esc(fl)}</span>${ICON_CHEV}</button>`
+    : `<button class="srcbtn fltbtn" data-flt="${esc(f.key)}" title="Filtrer les lignes sur les valeurs de ce champ">${ICON_FUNNEL}<span>Toutes</span>${ICON_CHEV}</button>`;
   const st = [V.err ? `<span class="pill err" title="Lignes en erreur">${nf(V.err)}</span>` : '', V.warn ? `<span class="pill warn" title="Lignes avec alerte">${nf(V.warn)}</span>` : ''].join('');
   return `<div class="grow frow${m ? ' mapped' : ''}${sel ? ' sel' : ''}" data-k="${esc(f.key)}" tabindex="${sel ? 0 : -1}">
     <div><span class="fcap" title="${esc(f.caption)}">${esc(f.caption)}</span><span class="ftype"><code>${f.L}</code> ${esc(typeLabel(f.type))}${f.i === 0 ? '<span class="key">clé</span>' : ''}</span></div>
     <div><button class="srcbtn ${cls}" data-pick="${esc(f.key)}" title="${esc(srcTxt)}"><span>${esc(srcTxt)}</span>${ICON_CHEV}</button></div>
     <div class="chips">${chips}</div>
+    <div class="flt">${flt}</div>
     <div class="prev">${prev}</div>
     <div class="stat">${st}</div>
   </div>`;
@@ -102,7 +110,7 @@ function renderGrid() {
   const t = curT(); const wrap = $('#gridwrap'); if (!wrap) return;
   if (S.ui.tab === 'prev') return renderPreview();
   const fs = visibleFields(t);
-  wrap.innerHTML = `<div class="grid"><div class="grow ghead"><div>Champ Business Central</div><div>Colonne Navision</div><div>Format</div><div>Exemple (source → package)</div><div></div></div>` +
+  wrap.innerHTML = `<div class="grid"><div class="grow ghead"><div>Champ Business Central</div><div>Colonne Navision</div><div>Format</div><div>Filtre</div><div>Exemple (source → package)</div><div></div></div>` +
     (fs.length ? fs.map(f => fieldRowHTML(t, f)).join('') : `<div class="empty">Aucun champ ne correspond à ce filtre.</div>`) + '</div>';
 }
 function refreshRow(t, f) {
@@ -110,7 +118,7 @@ function refreshRow(t, f) {
   const tmp = document.createElement('div'); tmp.innerHTML = fieldRowHTML(t, f); el.replaceWith(tmp.firstElementChild);
 }
 function renderPreview() {
-  const t = curT(); const T = tm(t); const ctx = getCtx(T); const wrap = $('#gridwrap');
+  const t = curT(); const ctx = tableCtx(t); const wrap = $('#gridwrap');
   if (!ctx) { wrap.innerHTML = `<div class="empty">Choisissez une feuille source pour voir les lignes qui seront générées.</div>`; return; }
   const N = Math.min(200, ctx.rows.length);
   const fns = t.fields.map(f => compileField(t, f, getF(t, f), ctx));
@@ -205,7 +213,7 @@ function vmapDot(f, F, from, to) {
 }
 function refreshInspectorLive() {
   const t = curT(); const f = t.fields.find(x => x.key === S.ui.f); if (!f) return;
-  const T = tm(t); const ctx = getCtx(T); const F = getF(t, f);
+  const ctx = tableCtx(t); const F = getF(t, f);
   const V = S.val[t.name]?.fields[f.key] || {};
   const sp = $('#secPrev'); const si = $('#secIssues'); if (!sp) return;
   if (!ctx) { sp.innerHTML = `<h4>Aperçu</h4><div class="note">Choisissez d'abord une feuille source pour cette table.</div>`; si.innerHTML = ''; return; }
@@ -236,8 +244,19 @@ function inspectorHelp(t) {
 let popEl = null;
 function closePicker() { if (popEl) { popEl.remove(); popEl = null; document.removeEventListener('mousedown', outsidePick, true); } }
 function outsidePick(e) { if (popEl && !popEl.contains(e.target)) closePicker(); }
-function openPicker(anchor, key) {
+function openPop(anchor, html, W) {
   closePicker();
+  popEl = document.createElement('div'); popEl.className = 'pop'; popEl.setAttribute('role', 'dialog'); popEl.style.width = W + 'px';
+  popEl.innerHTML = html; document.body.appendChild(popEl);
+  const r = anchor.getBoundingClientRect();
+  popEl.style.left = Math.max(8, Math.min(r.left, innerWidth - W - 8)) + 'px';
+  const below = innerHeight - r.bottom;
+  if (below < 300 && r.top > below) { popEl.style.bottom = (innerHeight - r.top + 4) + 'px'; popEl.style.maxHeight = Math.min(430, r.top - 12) + 'px'; }
+  else { popEl.style.top = (r.bottom + 4) + 'px'; popEl.style.maxHeight = Math.min(430, below - 12) + 'px'; }
+  setTimeout(() => document.addEventListener('mousedown', outsidePick, true), 0);
+  return popEl;
+}
+function openPicker(anchor, key) {
   const t = curT(); const f = t.fields.find(x => x.key === key); const T = tm(t); const ctx = getCtx(T);
   if (!ctx) { toast("Choisissez d'abord une feuille source pour cette table."); return; }
   const F = getF(t, f);
@@ -249,14 +268,7 @@ function openPicker(anchor, key) {
     { k: 'sep' },
     ...ctx.cols.map(c => ({ k: 'col', col: c })),
   ];
-  popEl = document.createElement('div'); popEl.className = 'pop'; popEl.setAttribute('role', 'dialog');
-  popEl.innerHTML = `<input type="search" placeholder="Filtrer les ${ctx.cols.length} colonnes" aria-label="Filtrer les colonnes"><ul role="listbox"></ul>`;
-  document.body.appendChild(popEl);
-  const r = anchor.getBoundingClientRect(); const W = 380;
-  popEl.style.left = Math.max(8, Math.min(r.left, innerWidth - W - 8)) + 'px';
-  const below = innerHeight - r.bottom;
-  if (below < 300 && r.top > below) { popEl.style.bottom = (innerHeight - r.top + 4) + 'px'; popEl.style.maxHeight = Math.min(430, r.top - 12) + 'px'; }
-  else { popEl.style.top = (r.bottom + 4) + 'px'; popEl.style.maxHeight = Math.min(430, below - 12) + 'px'; }
+  openPop(anchor, `<input type="search" placeholder="Filtrer les ${ctx.cols.length} colonnes" aria-label="Filtrer les colonnes"><ul role="listbox"></ul>`, 380);
   const inp = popEl.querySelector('input'); const ul = popEl.querySelector('ul');
   let list = [], act = 0;
   const q0 = norm(f.caption);
@@ -301,26 +313,67 @@ function openPicker(anchor, key) {
   draw();
   if (F?.kind === 'col') { const idx = popEl._sel.findIndex(i => i.k === 'col' && i.col.name === F.col && !i.top); if (idx >= 0) { act = idx; draw(); } }
   inp.focus();
-  setTimeout(() => document.addEventListener('mousedown', outsidePick, true), 0);
+}
+
+/* ----- filtre des lignes (popover à choix multiples) ----- */
+function openFilter(anchor, key) {
+  const t = curT(); const f = t.fields.find(x => x.key === key); const ctx = getCtx(tm(t)); const F = getF(t, f);
+  if (!ctx || !canFilter(F)) return;
+  const vals = sourceValues(F, ctx);
+  const sel = new Set((F.filter || []).map(v => v.toLowerCase()));
+  for (const v of F.filter || []) if (!vals.some(([x]) => x.toLowerCase() === v.toLowerCase())) vals.push([v, 0]); // valeur retenue absente de la source
+  openPop(anchor, `<div class="pophead"><input type="search" placeholder="Rechercher…" aria-label="Rechercher une valeur"><button class="btn small ghost" data-clear>Effacer</button></div><ul role="listbox" aria-multiselectable="true"></ul>`, 320);
+  const inp = popEl.querySelector('input'); const ul = popEl.querySelector('ul');
+  let list = [], act = 0; const MAX = 500;
+  const draw = () => {
+    const q = norm(inp.value);
+    list = vals.filter(([v]) => !q || norm(v).includes(q));
+    act = Math.max(0, Math.min(act, list.length - 1));
+    ul.innerHTML = list.slice(0, MAX).map(([v, n], i) => { const on = sel.has(v.toLowerCase());
+      return `<li role="option" aria-selected="${on}" class="chk${i === act ? ' act' : ''}" data-i="${i}"><input type="checkbox" tabindex="-1" ${on ? 'checked' : ''}><span class="nm">${v === '' ? '<i>(vide)</i>' : esc(v)}</span><span class="cnt">${n ? nf(n) : ''}</span></li>`; }).join('')
+      + (list.length > MAX ? `<li class="more">${nf(list.length - MAX)} autres valeurs : affinez la recherche.</li>` : '')
+      + (list.length ? '' : '<li class="more">Aucune valeur.</li>');
+    ul.querySelector('.act')?.scrollIntoView({ block: 'nearest' });
+  };
+  const apply = () => { const values = vals.map(([v]) => v).filter(v => sel.has(v.toLowerCase())); setField(t, f, { filter: values.length ? values : null }, false); };
+  const toggle = i => { const k = list[i][0].toLowerCase(); if (sel.has(k)) sel.delete(k); else sel.add(k); act = i; draw(); apply(); };
+  inp.addEventListener('input', () => { act = 0; draw(); });
+  inp.addEventListener('keydown', e => {
+    const n = Math.min(list.length, MAX); if (!n && e.key !== 'Escape') return;
+    if (e.key === 'ArrowDown') { act = (act + 1) % n; draw(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { act = (act - 1 + n) % n; draw(); e.preventDefault(); }
+    else if (e.key === 'Enter') { toggle(act); e.preventDefault(); }
+    else if (e.key === 'Escape') { closePicker(); $(`[data-flt="${CSS.escape(key)}"]`)?.focus(); }
+  });
+  ul.addEventListener('mousedown', e => { const li = e.target.closest('li[data-i]'); if (li) { e.preventDefault(); toggle(+li.dataset.i); } });
+  popEl.querySelector('[data-clear]').addEventListener('click', () => { sel.clear(); draw(); apply(); inp.focus(); });
+  draw(); inp.focus();
 }
 
 /* ----- mises à jour ----- */
 function setField(t, f, patch, full) {
-  const T = tm(t);
+  const T = tm(t); const sig = filterSig(t);
   const F = { ...(T.fields[f.key] || newF()), ...patch };
   if (patch.auto === null) delete F.auto;
+  if (patch.kind === 'none') F.filter = null;
   T.fields[f.key] = F;
-  afterFieldChange(t, f, full);
+  if (filterSig(t) === sig) return afterFieldChange(t, f, full);
+  // les lignes retenues ont changé : tous les champs de la table sont à recontrôler
+  validateTable(t); renderTables();
+  if (S.ui.tab === 'prev') renderGrid(); else for (const x of t.fields) refreshRow(t, x);
+  refreshFacts(t);
+  if (full) renderInspector(); else refreshInspectorLive();
+  autosave();
 }
 function afterFieldChange(t, f, full) {
   validateTable(t, f.key);
   refreshRow(t, f);
   renderTables();
   if (full) renderInspector(); else refreshInspectorLive();
-  if (f.i === 0) updateFacts();
+  refreshFacts(t);
   autosave();
 }
-const updateFacts = debounce(() => { const sc = $('#gridwrap')?.scrollTop; renderCenter(); if ($('#gridwrap')) $('#gridwrap').scrollTop = sc; }, 300);
+function refreshFacts(t) { const el = $('#facts'); if (el) el.innerHTML = factsHTML(t); }
 function selectField(key, focusRow = true) {
   if (S.ui.f !== key) $('#insp').scrollTop = 0;
   S.ui.f = key;
@@ -372,6 +425,8 @@ function bindApp() {
       return;
     }
     const pick = e.target.closest('[data-pick]'); if (pick) { selectField(pick.dataset.pick, false); openPicker(pick, pick.dataset.pick); e.stopPropagation(); return; }
+    const fb = e.target.closest('[data-flt]');
+    if (fb) { selectField(fb.dataset.flt, false); openFilter(fb, fb.dataset.flt); e.stopPropagation(); return; }
     const row = e.target.closest('.frow'); if (row) selectField(row.dataset.k);
   });
   center.addEventListener('input', debounce(e => { if (e.target.id === 'inSearch') { S.ui.q = e.target.value; renderGrid(); } }, 120));
@@ -448,7 +503,11 @@ function bindApp() {
 function openSettings() {
   const s = S.map.settings;
   const opt = (id, on, title, sub) => `<label class="chk"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span>${title}<small>${sub}</small></span></label>`;
-  $('#dlgSetBody').innerHTML = `<h3>Options de génération</h3><div class="sub">Elles sont enregistrées avec le mapping.</div>
+  let theme = getTheme();
+  $('#dlgSetBody').innerHTML = `<h3>Options</h3>
+    <h4>Apparence</h4><div class="sub">Propre à ce navigateur.</div>
+    <div class="seg" id="segTheme">${[['light', 'Clair'], ['dark', 'Sombre'], ['auto', "Suivre l'appareil"]].map(([k, l]) => `<button data-th="${k}" aria-pressed="${theme === k}">${l}</button>`).join('')}</div>
+    <h4>Génération</h4><div class="sub">Enregistrées avec le mapping.</div>
     ${opt('setDef', s.fillDefaults, 'Compléter les champs vides avec les valeurs par défaut BC', 'false, 0, première option… déduits des lignes déjà présentes dans le package. Évite les erreurs de validation à l\'import.')}
     ${opt('setTrunc', s.truncate, 'Tronquer les valeurs trop longues', 'Sinon, la valeur est signalée en erreur. La longueur maximale vient du type du champ (Code20, Text100…).')}
     ${opt('setUpper', s.upperCode, 'Mettre en majuscules les champs de type Code', 'Business Central stocke toujours les codes en majuscules.')}
@@ -456,14 +515,16 @@ function openSettings() {
     <div class="actions"><button class="btn" id="setCancel">Annuler</button><button class="btn primary" id="setOk">Appliquer</button></div>`;
   const d = $('#dlgSettings'); d.showModal();
   $('#setCancel').onclick = () => d.close();
+  $('#segTheme').onclick = e => { const b = e.target.closest('[data-th]'); if (!b) return; theme = b.dataset.th; $$('#segTheme button').forEach(x => x.setAttribute('aria-pressed', x === b)); };
   $('#setOk').onclick = () => {
+    setTheme(theme);
     Object.assign(S.map.settings, { fillDefaults: $('#setDef').checked, truncate: $('#setTrunc').checked, upperCode: $('#setUpper').checked, skipEmpty: $('#setSkip').checked });
     d.close(); ctxCache.clear(); validateAll(); renderAll(); autosave(); toast('Options appliquées.');
   };
 }
 function openGenerate() {
   const rows = S.pkg.tables.map(t => {
-    const T = tm(t); const mode = effectiveMode(t); const ctx = getCtx(T); const iss = tableIssues(t);
+    const T = tm(t); const mode = effectiveMode(t); const ctx = tableCtx(t); const iss = tableIssues(t);
     const n = mode === 'keep' ? t.existing.length : mode === 'append' ? t.existing.length + ctx.rows.length : ctx.rows.length;
     const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
     const modeTxt = mode === 'keep' ? 'Inchangée' : mode === 'append' ? 'Ajout' : 'Remplacement';

@@ -3,7 +3,7 @@
 
 /* ---------------- modèle de mapping ---------------- */
 function newMap() { return { app: APP_ID, version: MAP_VERSION, settings: defaultSettings(), tables: {} }; }
-const newF = () => ({ kind: 'none', col: '', value: '', tpl: '', map: [], case: 'none', padLen: 0, padChar: '0', padNum: true, prefix: '', suffix: '', dflt: '' });
+const newF = () => ({ kind: 'none', col: '', value: '', tpl: '', map: [], case: 'none', padLen: 0, padChar: '0', padNum: true, prefix: '', suffix: '', dflt: '', filter: null });
 function tm(t) { return (S.map.tables[t.name] ||= { source: null, headerRow: 1, mode: 'keep', fields: {} }); }
 function getF(t, f) { return tm(t).fields[f.key] || null; }
 function isMapped(F) { return !!F && ((F.kind === 'col' && !!F.col) || (F.kind === 'const') || (F.kind === 'tpl' && !!F.tpl)); }
@@ -56,27 +56,65 @@ function distinctValues(ctx, colName, limit = 300) {
   return [...cnt].sort((a, b) => b[1] - a[1]).slice(0, limit);
 }
 
+/* ---------------- filtres de lignes ----------------
+   Un champ alimenté par une colonne ou une combinaison peut restreindre les lignes source :
+   F.filter liste les valeurs source conservées, comparées sans tenir compte de la casse. */
+const canFilter = F => !!F && ((F.kind === 'col' && !!F.col) || (F.kind === 'tpl' && !!F.tpl));
+const filterActive = F => canFilter(F) && Array.isArray(F.filter) && F.filter.length > 0;
+function filterLabel(values) {
+  return values.slice(0, 2).map(v => v === '' ? '(vide)' : v).join(', ') + (values.length > 2 ? ` +${values.length - 2}` : '');
+}
+function filterSig(t) {
+  const T = tm(t); const a = [];
+  for (const f of t.fields) { const F = T.fields[f.key]; if (filterActive(F)) a.push([f.key, F.kind, F.col, F.tpl, F.filter]); }
+  return a.length ? JSON.stringify(a) : '';
+}
+/* contexte source de la table, restreint aux lignes qui passent les filtres de ses champs */
+function tableCtx(t) {
+  const T = tm(t); const base = getCtx(T); if (!base) return null;
+  const sig = filterSig(t); if (!sig) return base;
+  const key = 'F|' + base.key; const hit = ctxCache.get(key);
+  if (hit && hit.sig === sig) return hit.ctx;
+  const tests = t.fields.map(f => T.fields[f.key]).filter(filterActive).map(F => [sourceGetter(F, base).get, new Set(F.filter.map(v => v.trim().toLowerCase()))]);
+  const rows = [], rowNums = [];
+  base.rows.forEach((row, i) => { if (tests.every(([get, keep]) => !get || keep.has(get(row).trim().toLowerCase()))) { rows.push(row); rowNums.push(base.rowNums[i]); } });
+  const ctx = { ...base, rows, rowNums, total: base.rows.length };
+  ctxCache.set(key, { sig, ctx }); return ctx;
+}
+/* valeurs source distinctes d'un champ avec leur nombre d'occurrences, par ordre alphabétique */
+function sourceValues(F, ctx) {
+  const { get } = sourceGetter(F, ctx); if (!get) return [];
+  const cnt = new Map();
+  for (const r of ctx.rows) { const s = get(r).trim(); cnt.set(s, (cnt.get(s) || 0) + 1); }
+  return [...cnt].sort((a, b) => a[0].localeCompare(b[0], 'fr', { numeric: true }));
+}
+
 /* ---------------- moteur de transformation ---------------- */
-function titleCase(s) { return s.toLowerCase().replace(/(^|[\s\-'’(\/])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()); }
-function compileField(t, f, F, ctx) {
-  const set = S.map.settings;
-  const dflt = set.fillDefaults ? f.dflt : '';
+/* lecture de la valeur source d'un champ (colonne, constante ou combinaison) -> {get, missing} */
+function sourceGetter(F, ctx) {
   const kind = F ? F.kind : 'none';
-  let get = null, missing = null;
   if (kind === 'col' && F.col) {
     const col = ctx?.byName.get(F.col);
-    if (col) { const i = col.idx; get = row => cellStr(row[i]); } else { missing = `colonne « ${F.col} » introuvable dans la source`; }
-  } else if (kind === 'const') {
-    const k = F.value ?? ''; get = () => k;
-  } else if (kind === 'tpl' && F.tpl) {
+    if (col) { const i = col.idx; return { get: row => cellStr(row[i]) }; }
+    return { get: null, missing: `colonne « ${F.col} » introuvable dans la source` };
+  }
+  if (kind === 'const') { const k = F.value ?? ''; return { get: () => k }; }
+  if (kind === 'tpl' && F.tpl) {
     const parts = []; let last = 0;
     for (const m of F.tpl.matchAll(/\{([^}]+)\}/g)) {
       parts.push(F.tpl.slice(last, m.index));
       const col = ctx?.byName.get(m[1]); parts.push(col ? col.idx : -1); last = m.index + m[0].length;
     }
     parts.push(F.tpl.slice(last));
-    get = row => { let s = ''; for (const p of parts) s += typeof p === 'number' ? (p >= 0 ? cellStr(row[p]).trim() : '') : p; return s.replace(/\s{2,}/g, ' ').replace(/^[\s\-–,;/|]+|[\s\-–,;/|]+$/g, ''); };
+    return { get: row => { let s = ''; for (const p of parts) s += typeof p === 'number' ? (p >= 0 ? cellStr(row[p]).trim() : '') : p; return s.replace(/\s{2,}/g, ' ').replace(/^[\s\-–,;/|]+|[\s\-–,;/|]+$/g, ''); } };
   }
+  return { get: null };
+}
+function titleCase(s) { return s.toLowerCase().replace(/(^|[\s\-'’(\/])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()); }
+function compileField(t, f, F, ctx) {
+  const set = S.map.settings;
+  const dflt = set.fillDefaults ? f.dflt : '';
+  const { get, missing } = sourceGetter(F, ctx);
   if (!get) {
     const res = { v: dflt, d: dflt !== '', e: missing, empty: true };
     return () => res;
@@ -102,7 +140,7 @@ function compileField(t, f, F, ctx) {
 
 /* contrôle d'un champ sur toutes les lignes */
 function checkField(t, f) {
-  const T = tm(t); const ctx = getCtx(T); const F = getF(t, f);
+  const ctx = tableCtx(t); const F = getF(t, f);
   const out = { err: 0, warn: 0, ex: [], sampleIn: undefined, sampleOut: '', sampleDef: false, sampleBad: false, missing: null };
   if (!ctx || !ctx.rows.length) { out.sampleOut = S.map.settings.fillDefaults ? f.dflt : ''; out.sampleDef = true; return out; }
   if (F?.kind === 'col' && F.col && !ctx.byName.has(F.col)) {
@@ -120,7 +158,7 @@ function checkField(t, f) {
   return out;
 }
 function checkKeys(t) {
-  const T = tm(t); const ctx = getCtx(T); const f = t.fields[0];
+  const T = tm(t); const ctx = tableCtx(t); const f = t.fields[0];
   if (!ctx || !f) return null;
   const fn = compileField(t, f, getF(t, f), ctx);
   const seen = new Map(); let empty = 0, dup = 0; const ex = [];

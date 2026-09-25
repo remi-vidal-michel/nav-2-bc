@@ -44,7 +44,7 @@ Un champ peut être alimenté de quatre façons :
 | Combinaison | Plusieurs colonnes assemblées, par exemple `{Nom} {Prénom}`. |
 | Aucune | Le champ reste vide ou reçoit la valeur par défaut BC. |
 
-Les filtres *Alimentés*, *Non alimentés* et *Anomalies* ainsi que la recherche aident à parcourir les longues tables.
+Les boutons *Alimentés*, *Non alimentés* et *Anomalies* ainsi que le champ **Rechercher** aident à parcourir les longues tables.
 
 ### 4. Ajuster les valeurs
 
@@ -58,7 +58,16 @@ Le panneau affiche aussi un aperçu des valeurs avant et après transformation, 
 
 L'onglet **Aperçu du résultat** montre la table telle qu'elle sera écrite dans le package.
 
-### 5. Vérifier les anomalies
+### 5. Filtrer les lignes
+
+Par défaut, toutes les lignes de la feuille Navision sont reprises. Pour n'en garder qu'une partie, utilisez la colonne **Filtre** d'un champ alimenté par une colonne ou une combinaison :
+
+1. Cliquez sur le bouton **Toutes** du champ. La liste des valeurs présentes s'ouvre, avec leur nombre d'occurrences.
+2. Cochez les valeurs à conserver. La zone **Rechercher…** réduit la liste, **Effacer** retire le filtre.
+
+Le bouton affiche alors les valeurs retenues. Si plusieurs champs sont filtrés, une ligne n'est conservée que si elle passe tous les filtres. Le nombre de lignes retenues apparaît sous le titre de la table. Les contrôles, l'aperçu et le package généré ne tiennent compte que de ces lignes.
+
+### 6. Vérifier les anomalies
 
 L'outil contrôle chaque valeur par rapport au type du champ BC (texte, code, date, nombre, booléen, option) et à sa longueur maximale :
 
@@ -67,19 +76,21 @@ L'outil contrôle chaque valeur par rapport au type du champ BC (texte, code, da
 
 Les doublons et les valeurs vides sur la clé primaire (premier champ) sont aussi signalés.
 
-### 6. Générer le package
+### 7. Générer le package
 
 Cliquez sur **Générer le package**. Un récapitulatif indique, pour chaque table, la source, le nombre de lignes finales et l'état des contrôles. Vous pouvez télécharger un **rapport des anomalies** (CSV) pour les corriger dans Navision.
 
 Le fichier produit s'appelle `<nom du package>_rempli_<date>.xlsx`. Les valeurs encore en erreur sont laissées vides, sauf les options inconnues, qui sont écrites telles quelles.
 
-### 7. Importer dans Business Central
+### 8. Importer dans Business Central
 
 Dans *Packages de configuration*, ouvrez le package, lancez **Importer d'Excel** et sélectionnez le fichier généré. Contrôlez ensuite les erreurs dans *Données du package* avant d'appliquer.
 
-## Options de génération
+## Options
 
-Le bouton **Options** propose les réglages suivants. Ils sont enregistrés avec le mapping.
+Le bouton **Options** permet d'abord de choisir l'**apparence** : *Clair*, *Sombre* ou *Suivre l'appareil* (le thème du système Windows). Ce choix est propre à votre navigateur.
+
+Il propose ensuite des réglages de génération, enregistrés avec le mapping :
 
 - **Compléter les champs vides avec les valeurs par défaut BC** (`false`, `0`, première option…), déduites des lignes déjà présentes dans le package.
 - **Tronquer les valeurs trop longues** au lieu de les signaler en erreur.
@@ -90,7 +101,7 @@ Le bouton **Options** propose les réglages suivants. Ils sont enregistrés avec
 
 Le mapping en cours est sauvegardé automatiquement dans le navigateur. Cette sauvegarde est liée à l'emplacement du fichier HTML : si vous le déplacez ou le renommez, elle n'est plus retrouvée.
 
-Pour conserver ou partager un mapping, cliquez sur **Exporter le mapping** (ou Ctrl+S). Vous obtenez un fichier .json que vous rechargerez avec **Importer le mapping**, par exemple pour traiter un nouvel export Navision avec les mêmes règles.
+Pour conserver ou partager un mapping, cliquez sur **Exporter le mapping** (ou Ctrl+S). Vous obtenez un fichier .json qui contient les correspondances, les mises en forme, les filtres et les options de génération. Vous le rechargerez avec **Importer le mapping**, par exemple pour traiter un nouvel export Navision avec les mêmes règles.
 
 ## Raccourcis clavier
 

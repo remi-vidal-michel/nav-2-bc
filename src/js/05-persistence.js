@@ -16,7 +16,10 @@ function validateMapping(obj) {
   const m = newMap(); m.settings = { ...defaultSettings(), ...(obj.settings || {}) };
   for (const [tn, T] of Object.entries(obj.tables)) {
     const fields = {};
-    for (const [k, F] of Object.entries(T.fields || {})) fields[k] = { ...newF(), ...F, map: Array.isArray(F.map) ? F.map.filter(p => Array.isArray(p) && p.length === 2).map(p => [String(p[0]), String(p[1])]) : [] };
+    for (const [k, F] of Object.entries(T.fields || {})) {
+      const filter = Array.isArray(F.filter) && F.filter.length ? F.filter.map(String) : null;
+      fields[k] = { ...newF(), ...F, filter, map: Array.isArray(F.map) ? F.map.filter(p => Array.isArray(p) && p.length === 2).map(p => [String(p[0]), String(p[1])]) : [] };
+    }
     m.tables[tn] = { source: T.source ?? null, headerRow: +T.headerRow || 1, mode: ['replace', 'append', 'keep'].includes(T.mode) ? T.mode : 'keep', fields };
   }
   return m;

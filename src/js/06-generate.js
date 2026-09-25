@@ -3,7 +3,7 @@
 
 /* ---------------- génération du package ---------------- */
 function buildTableRows(t) {
-  const T = tm(t); const ctx = getCtx(T);
+  const ctx = tableCtx(t);
   const fns = t.fields.map(f => compileField(t, f, getF(t, f), ctx));
   const out = [];
   if (!ctx) return out;
@@ -73,7 +73,7 @@ function reportCSV() {
   const lines = [['Table', 'Ligne source', 'Champ BC', 'Valeur source', 'Valeur générée', 'Niveau', 'Message']];
   for (const t of S.pkg.tables) {
     if (effectiveMode(t) === 'keep') continue;
-    const T = tm(t); const ctx = getCtx(T);
+    const ctx = tableCtx(t);
     for (const f of t.fields) {
       const fn = compileField(t, f, getF(t, f), ctx);
       ctx.rows.forEach((row, i) => { const r = fn(row); if (r.e || r.w) lines.push([t.name, ctx.rowNums[i], f.caption, r.input ?? '', r.v, r.e ? 'Erreur' : 'Alerte', r.e || r.w]); });
