@@ -43,7 +43,7 @@ function startWorkspace(changed) {
       } catch { S.map = fresh; }
     }
     validateAll(); renderAll(); autosave();
-    toast(n ? `${plural(n, 'champ associé', 'champs associés')} automatiquement par leur nom. Vérifiez ceux marqués « à vérifier ».` : 'Associez les feuilles source aux tables du package pour commencer.', { ms: 7000 });
+    toast(n ? `${plural(n, 'champ associé', 'champs associés')} automatiquement par leur nom. Vérifiez ceux marqués « à vérifier ».` : 'Associez les feuilles source aux tables du package BC pour commencer.', { ms: 7000 });
     return;
   }
   // remplacement d'un fichier en cours de session : on garde le mapping
@@ -64,7 +64,6 @@ function bindLanding() {
     $(inp).addEventListener('change', e => { handleFile(e.target.files[0], kind); e.target.value = ''; });
   }
   $('#fileMap').addEventListener('change', async e => { const f = e.target.files[0]; e.target.value = ''; if (f) try { await importMappingFile(f); } catch (err) { toast(err.message, { err: true }); } });
-  $('#landingImport').onclick = () => $('#fileMap').click();
   window.addEventListener('dragover', e => e.preventDefault());
   window.addEventListener('drop', async e => {
     e.preventDefault(); const files = [...e.dataTransfer.files];

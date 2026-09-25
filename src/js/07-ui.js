@@ -14,7 +14,7 @@ function renderChips() {
 }
 function renderTables() {
   const el = $('#tables');
-  el.innerHTML = '<h3>Tables du package</h3>' + S.pkg.tables.map((t, i) => {
+  el.innerHTML = '<h3>Tables du package BC</h3>' + S.pkg.tables.map((t, i) => {
     const T = tm(t); const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
     const iss = tableIssues(t); const mode = effectiveMode(t);
     const modeTxt = mode === 'keep' ? 'Inchangée' : mode === 'append' ? 'Ajout' : 'Remplacement';
@@ -31,7 +31,7 @@ function renderCenter() {
   const sheets = S.raw.sheets.map(s => `<option value="${esc(s.name)}"${s.name === T.source ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
   $('#center').innerHTML = `
   <div class="thead">
-    <h2>${esc(t.name)} <small>Table ${esc(t.tableId)} ${t.tableCaption ? '(' + esc(t.tableCaption) + ')' : ''}, package ${esc(t.pkgCode)}</small></h2>
+    <h2>${esc(t.name)} <span class="facts" id="facts">${factsHTML(t)}</span></h2>
     <div class="controls">
       <label class="ctl"><span>Feuille source Navision</span><select id="selSource"><option value="">Aucune</option>${sheets}</select></label>
       <label class="ctl"><span>Ligne d'en-tête</span><input type="number" id="inHdr" min="1" max="50" value="${T.headerRow}" ${T.source ? '' : 'disabled'}></label>
@@ -42,7 +42,6 @@ function renderCenter() {
       <button class="btn" id="btnAuto" ${ctx ? '' : 'disabled'} title="Associe les colonnes dont le nom correspond">Mapper automatiquement</button>
       <button class="btn ghost" id="btnClear" title="Retirer toutes les correspondances de cette table">Tout effacer</button>
     </div>
-    <div class="facts" id="facts">${factsHTML(t)}</div>
   </div>
   <div class="toolbar">
     <div class="seg" role="tablist">
@@ -63,7 +62,7 @@ function factsHTML(t) {
   const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
   const K = S.val[t.name]?.keys;
   const keyNote = K && mode !== 'keep' && (K.dup || K.empty) ? `<span style="color:var(--err)"><b style="color:inherit">Clé ${esc(t.fields[0].caption)}</b> : ${[K.dup && plural(K.dup, 'doublon'), K.empty && plural(K.empty, 'valeur vide', 'valeurs vides')].filter(Boolean).join(', ')}</span>` : '';
-  return `<span><b>${ctx ? nf(ctx.rows.length) : 0}</b> lignes source${ctx?.total !== undefined ? ` retenues sur ${nf(ctx.total)} (filtres)` : ''}</span>
+  return `<span><b>${ctx ? nf(ctx.rows.length) : 0}</b> lignes source${ctx?.total !== undefined ? ` filtrées / ${nf(ctx.total)}` : ''}</span>
       <span><b>${nf(t.existing.length)}</b> lignes déjà dans le package</span>
       <span><b>${mapped}</b> / ${t.fields.length} champs alimentés</span>
       ${mode === 'keep' && T.source ? '<span>Cette table sera recopiée telle quelle.</span>' : ''}
@@ -116,7 +115,7 @@ function renderGrid() {
   const t = curT(); const wrap = $('#gridwrap'); if (!wrap) return;
   if (S.ui.tab === 'prev') return renderPreview();
   const fs = visibleFields(t);
-  wrap.innerHTML = `<div class="grid"><div class="grow ghead"><div>Champ Business Central</div><div>Colonne Navision</div><div>Format</div><div>Filtre</div><div>Exemple (source → package)</div><div></div></div>` +
+  wrap.innerHTML = `<div class="grid"><div class="grow ghead"><div>Champ Business Central</div><div>Colonne Navision</div><div>Format</div><div>Filtre</div><div>Exemple</div><div></div></div>` +
     (fs.length ? fs.map(f => fieldRowHTML(t, f)).join('') : `<div class="empty">Aucun champ ne correspond à ce filtre.</div>`) + '</div>';
 }
 function refreshRow(t, f) {
@@ -237,8 +236,8 @@ function renderInspector() {
     </div>`,
   });
   el.innerHTML = `<div class="insp-inner" data-k="${esc(f.key)}">
-    <h3>${esc(f.caption)}</h3>
-    <div class="sub">Colonne ${f.L} du package, type ${esc(typeLabel(ty))}${f.i === 0 ? ', clé primaire' : ''}${f.dflt !== '' ? `, défaut BC <code>${esc(f.dflt)}</code>` : ''}</div>
+    <h3>${esc(f.caption)} <span class="ftype">${esc(typeLabel(ty))}${f.i === 0 ? '<span class="key">clé</span>' : ''}</span></h3>
+    ${f.dflt !== '' ? `<div class="sub">Défaut BC <code>${esc(f.dflt)}</code></div>` : ''}
     ${optHTML}
     <div class="sec"><h4>Source</h4>
       <div class="seg" id="segKind" style="margin-bottom:10px">${[['col', 'Colonne'], ['const', 'Constante'], ['tpl', 'Combinaison'], ['none', 'Aucune']].map(([k, l]) => `<button data-kind="${k}" aria-pressed="${kind === k}">${l}</button>`).join('')}</div>

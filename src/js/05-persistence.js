@@ -27,7 +27,7 @@ function validateMapping(obj) {
 async function importMappingFile(file) {
   let obj; try { obj = JSON.parse(await file.text()); } catch { throw new Error("Le fichier de mapping n'est pas un JSON valide."); }
   const m = validateMapping(obj);
-  if (S.pkg && S.raw) applyImportedMapping(m); else { S.pendingMap = m; $('#landingMapName').textContent = `Mapping prêt : ${file.name}`; toast('Mapping chargé. Il sera appliqué dès que les deux fichiers seront chargés.'); }
+  if (S.pkg && S.raw) applyImportedMapping(m); else { S.pendingMap = m; toast('Mapping chargé. Il sera appliqué dès que les deux fichiers seront chargés.'); }
 }
 function applyImportedMapping(m, silent) {
   S.map = m; ctxCache.clear(); S.val = {};

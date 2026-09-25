@@ -14,7 +14,7 @@ L'outil tient dans un seul fichier, `nav-2-bc.html`. Il s'ouvre par double-clic 
 
 ### 1. Charger les fichiers
 
-Sur l'écran d'accueil, déposez ou sélectionnez l'export Navision puis le package BC. Si vous avez un modèle de mapping, chargez-le aussi : il sera appliqué dès que les deux fichiers seront ouverts.
+Sur l'écran d'accueil, déposez ou sélectionnez l'export Navision puis le package BC. Si vous avez un modèle de mapping, vous le chargerez ensuite avec **Importer le mapping**, en haut de l'espace de travail.
 
 Pour remplacer un fichier plus tard, cliquez sur son nom en haut de l'écran.
 
@@ -22,7 +22,7 @@ L'espace de travail comporte trois panneaux : les tables à gauche, les correspo
 
 ### 2. Choisir la source de chaque table
 
-La colonne de gauche liste les tables du package, avec une barre indiquant la part de champs alimentés. Pour chaque table, choisissez :
+La colonne de gauche liste les tables du package BC, avec une barre indiquant la part de champs alimentés. Pour chaque table, choisissez :
 
 - **la feuille source Navision** (l'outil propose celle dont le nom correspond) ;
 - **la ligne d'en-tête** si les noms de colonnes ne sont pas sur la première ligne ;

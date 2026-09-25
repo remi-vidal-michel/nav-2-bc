@@ -63,7 +63,6 @@ label.chk input{margin-top:3px}
 .drop h2{margin:6px 0 0;font-size:17px}
 .drop .hint{color:var(--muted);font-size:13px}
 .drop .fname{margin-top:auto;font-family:var(--mono);font-size:12.5px;color:var(--ok);word-break:break-all}
-.landing-foot{margin-top:22px;display:flex;gap:12px;align-items:center;color:var(--muted);font-size:13px}
 
 /* app shell */
 #app{display:grid;grid-template-rows:auto 1fr;height:100vh}
@@ -103,14 +102,13 @@ aside.tables h3{font-size:12px;color:var(--muted);font-weight:600;margin:4px 6px
 
 main.center{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--panel);overflow:hidden}
 .thead{padding:14px 18px 10px;border-bottom:1px solid var(--line2)}
-.thead h2{margin:0;font-size:19px;font-weight:650;display:flex;align-items:baseline;gap:10px}
-.thead h2 small{font-size:13px;color:var(--muted);font-weight:400}
+.thead h2{margin:0;font-size:19px;font-weight:650;display:flex;align-items:baseline;gap:10px 14px;flex-wrap:wrap}
 .controls{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;margin-top:12px}
 .ctl{display:flex;flex-direction:column;gap:3px}
 .ctl>span{font-size:12px;color:var(--muted)}
 .ctl select{min-width:180px}
 .ctl input[type=number]{width:70px}
-.facts{font-size:12.5px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+.facts{font-size:12.5px;color:var(--muted);font-weight:400;display:flex;gap:14px;flex-wrap:wrap}
 .facts b{color:var(--ink);font-weight:600}
 .toolbar{display:flex;align-items:center;gap:8px;padding:8px 18px;border-bottom:1px solid var(--line2);flex-wrap:wrap}
 .seg{display:inline-flex;border:1px solid var(--field-line);border-radius:6px;overflow:hidden}
@@ -184,7 +182,8 @@ mark{background:rgba(255,214,0,.4);color:inherit;border-radius:2px}
 /* inspector */
 aside.insp{background:var(--side);overflow:auto;min-height:0}
 .insp-inner{padding:16px 18px 40px}
-.insp h3{margin:0;font-size:18px;font-weight:650;word-break:break-word}
+.insp h3{margin:0;font-size:18px;font-weight:650;word-break:break-word;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.insp h3 .ftype{font-size:13px;font-weight:400}
 .insp .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
 .sec{border-top:1px solid var(--line2);margin-top:16px;padding-top:14px}
 .sec>summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;min-height:26px;user-select:none}
