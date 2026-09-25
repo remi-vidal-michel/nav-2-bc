@@ -84,7 +84,7 @@ function fieldRowHTML(t, f) {
   const chips = fmtChips(F, f).map(([c, l]) => `<span class="chip ${c}">${esc(l)}</span>`).join('');
   const outCls = V.sampleBad ? 'bad' : V.sampleDef ? 'def' : '';
   const prev = m && V.sampleIn !== undefined
-    ? `<span class="in" title="${esc(V.sampleIn)}">${esc(V.sampleIn || '∅')}</span><span class="arrow">→</span><span class="out ${outCls}" title="${esc(V.sampleOut)}">${esc(V.sampleOut === '' ? '∅' : V.sampleOut)}</span>`
+    ? `<span class="in" title="${esc(V.sampleIn)}">${esc(V.sampleIn || '-')}</span><span class="arrow">→</span><span class="out ${outCls}" title="${esc(V.sampleOut)}">${esc(V.sampleOut === '' ? '-' : V.sampleOut)}</span>`
     : `<span class="out def" title="Valeur écrite si le champ n'est pas alimenté">${S.map.settings.fillDefaults && f.dflt !== '' ? esc(f.dflt) : ''}</span>`;
   const fl = filterActive(F) ? filterSummary(t, F) : '';
   const flt = !canFilter(F) ? '' : fl
@@ -270,7 +270,7 @@ function refreshInspectorLive() {
   const fn = compileField(t, f, F, ctx);
   let rows = '';
   for (let i = 0; i < ctx.rows.length; i++) { const r = fn(ctx.rows[i]);
-    rows += `<tr class="${r.e ? 'err' : r.w ? 'warn' : ''}" title="${esc(r.e || r.w || '')}"><td class="rn">${ctx.rowNums[i]}</td><td class="in" title="${esc(r.input ?? '')}">${esc(r.input === undefined ? '' : (r.input || '∅'))}</td><td class="${r.e ? 'bad' : r.d ? 'def' : ''}" title="${esc(r.e || r.w || r.v)}">${esc(r.v === '' ? '∅' : r.v)}</td></tr>`; }
+    rows += `<tr class="${r.e ? 'err' : r.w ? 'warn' : ''}" title="${esc(r.e || r.w || '')}"><td class="rn">${ctx.rowNums[i]}</td><td class="in" title="${esc(r.input ?? '')}">${esc(r.input === undefined ? '' : (r.input || '-'))}</td><td class="${r.e ? 'bad' : r.d ? 'def' : ''}" title="${esc(r.e || r.w || r.v)}">${esc(r.v === '' ? '-' : r.v)}</td></tr>`; }
   hPrev.textContent = plural(ctx.rows.length, 'ligne');
   sp.innerHTML = `<div class="samples-wrap"><table class="samples"><thead><tr><th>Ligne</th><th>Source</th><th>Résultat</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   secIss.hidden = !(V.err || V.warn || isMapped(F));
