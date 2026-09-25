@@ -56,7 +56,7 @@ Sélectionnez un champ pour ouvrir le panneau de droite. Vous pouvez :
 - **Mettre en forme** : compléter à gauche jusqu'à une longueur (par exemple `42` devient `0000042`), ajouter un préfixe ou un suffixe, changer la casse, définir une valeur si la source est vide.
 - **Copier et coller la mise en forme** d'un champ à l'autre.
 
-Le panneau affiche aussi, pour toutes les lignes, la valeur source et le résultat dans une liste défilante, puis les lignes en anomalie.
+Sous la source, le panneau affiche les lignes en anomalie puis, pour toutes les lignes, la valeur source et le résultat dans une liste défilante ; les lignes en alerte y sont surlignées en jaune, celles en erreur en rouge. Ces sections se replient d'un clic sur leur titre. Repliées, elles gardent l'essentiel en résumé : le nombre d'anomalies, la mise en forme appliquée ou le nombre de lignes.
 
 Le mode **Aperçu du résultat** montre la table telle qu'elle sera écrite dans le package. La colonne du champ sélectionné y est mise en évidence. Cliquez sur un en-tête de colonne pour régler ce champ. Dans ce mode, **Rechercher** porte à la fois sur les noms des champs et des colonnes, et sur les valeurs : seules les lignes qui contiennent le texte cherché sont affichées, avec les colonnes concernées.
 
@@ -64,8 +64,8 @@ Le mode **Aperçu du résultat** montre la table telle qu'elle sera écrite dans
 
 Par défaut, toutes les lignes de la feuille Navision sont reprises. Pour n'en garder qu'une partie, utilisez la colonne **Filtre** d'un champ alimenté par une colonne ou une combinaison :
 
-1. Cliquez sur le bouton à entonnoir du champ. La liste des valeurs présentes s'ouvre, avec leur nombre d'occurrences.
-2. Cochez les valeurs à conserver. La zone **Rechercher…** réduit la liste, **Effacer** retire le filtre.
+1. Cliquez sur le bouton à entonnoir du champ. La liste des valeurs présentes s'ouvre, avec leur nombre d'occurrences. Comme dans Excel, toutes les valeurs sont cochées tant qu'il n'y a pas de filtre.
+2. Décochez les valeurs à écarter. La case à gauche de **Rechercher…** coche ou décoche d'un coup toutes les valeurs affichées : avec une recherche, elle ne porte que sur les résultats. **Effacer** retire le filtre.
 
 Le bouton affiche alors les valeurs retenues. Si plusieurs champs sont filtrés, une ligne n'est conservée que si elle passe tous les filtres. Le nombre de lignes retenues apparaît sous le titre de la table. Les contrôles, l'aperçu et le package généré ne tiennent compte que de ces lignes.
 

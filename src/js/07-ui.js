@@ -69,6 +69,12 @@ function factsHTML(t) {
       ${mode === 'keep' && T.source ? '<span>Cette table sera recopiée telle quelle.</span>' : ''}
       ${keyNote}`;
 }
+/* résumé d'un filtre : les valeurs conservées, ou « sauf … » quand on en a écarté moins */
+function filterSummary(t, F) {
+  const ctx = getCtx(tm(t)); const keep = new Set(F.filter.map(v => v.toLowerCase()));
+  const out = ctx ? sourceValues(F, ctx).map(([v]) => v).filter(v => !keep.has(v.toLowerCase())) : [];
+  return out.length && out.length < F.filter.length ? 'sauf ' + filterLabel(out) : filterLabel(F.filter);
+}
 function fieldRowHTML(t, f) {
   const F = getF(t, f); const V = S.val[t.name]?.fields[f.key] || {};
   const m = isMapped(F); const sel = S.ui.f === f.key;
@@ -81,7 +87,7 @@ function fieldRowHTML(t, f) {
   const prev = m && V.sampleIn !== undefined
     ? `<span class="in" title="${esc(V.sampleIn)}">${esc(V.sampleIn || '∅')}</span><span class="arrow">→</span><span class="out ${outCls}" title="${esc(V.sampleOut)}">${esc(V.sampleOut === '' ? '∅' : V.sampleOut)}</span>`
     : `<span class="out def" title="Valeur écrite si le champ n'est pas alimenté">${S.map.settings.fillDefaults && f.dflt !== '' ? esc(f.dflt) : ''}</span>`;
-  const fl = filterActive(F) ? filterLabel(F.filter) : '';
+  const fl = filterActive(F) ? filterSummary(t, F) : '';
   const flt = !canFilter(F) ? '' : fl
     ? `<button class="srcbtn fltbtn on" data-flt="${esc(f.key)}" title="Lignes conservées : ${esc(F.filter.map(v => v === '' ? '(vide)' : v).join(', '))}">${ICON_FUNNEL}<span>${esc(fl)}</span>${ICON_CHEV}</button>`
     : `<button class="srcbtn fltbtn" data-flt="${esc(f.key)}" title="Filtrer les lignes sur les valeurs de ce champ">${ICON_FUNNEL}<span></span>${ICON_CHEV}</button>`;
@@ -167,6 +173,11 @@ function markPreviewCol(scroll) {
 }
 
 /* ----- inspecteur ----- */
+/* section repliable ; le résumé reste visible une fois repliée, l'extra seulement dépliée */
+function secHTML(id, title, open, { hint = '', closedHint = '', extra = '', body = '' } = {}) {
+  const o = S.ui.open[id] ?? open;
+  return `<details class="sec" id="sec-${id}" data-sec="${id}" ${o ? 'open' : ''}><summary><h4>${title}</h4>${closedHint ? `<span class="hint when-closed">${closedHint}</span>` : ''}<span class="hint" id="hint-${id}">${hint}</span>${extra ? `<span class="when-open">${extra}</span>` : ''}</summary>${body}</details>`;
+}
 function renderInspector() {
   const el = $('#insp'); const t = curT();
   const f = t.fields.find(x => x.key === S.ui.f);
@@ -177,8 +188,8 @@ function renderInspector() {
   const srcBlock = (() => {
     if (kind === 'col') return `<button class="srcbtn ${F.col ? '' : 'none'}" data-pick="${esc(f.key)}"><span>${esc(F.col || 'Choisir une colonne')}</span>${ICON_CHEV}</button>`;
     if (kind === 'const') {
-      if (ty.base === 'Option') return `<select id="inConst"><option value="">(vide)</option>${ty.options.map(o => `<option${o.c === F.value ? ' selected' : ''}>${esc(o.c)}</option>`).join('')}</select>`;
-      if (ty.base === 'Boolean') return `<select id="inConst">${['true', 'false'].map(v => `<option${v === F.value ? ' selected' : ''}>${v}</option>`).join('')}</select>`;
+      if (ty.base === 'Option') return `<select id="inConst" style="width:100%"><option value="">(vide)</option>${ty.options.map(o => `<option${o.c === F.value ? ' selected' : ''}>${esc(o.c)}</option>`).join('')}</select>`;
+      if (ty.base === 'Boolean') return `<select id="inConst" style="width:100%"><option value="" disabled hidden${F.value === '' ? ' selected' : ''}>Choisir une valeur</option>${['true', 'false'].map(v => `<option${v === F.value ? ' selected' : ''}>${v}</option>`).join('')}</select>`;
       return `<input type="text" id="inConst" style="width:100%" value="${esc(F.value)}" placeholder="Valeur écrite sur toutes les lignes">`;
     }
     if (kind === 'tpl') return `<input type="text" id="inTpl" style="width:100%" value="${esc(F.tpl)}" placeholder="{Nom} {Prénom}">
@@ -198,13 +209,19 @@ function renderInspector() {
     const useful = ['Option', 'Boolean'].includes(ty.base) || dv.length <= 60;
     const nMapped = (F.map || []).filter(p => p[1] !== '').length;
     const open = useful || nMapped > 0;
-    vmapHTML = `<details class="sec" id="secMap" ${open ? 'open' : ''}><summary><h4 style="display:inline">Correspondance des valeurs</h4> <span class="hint">${plural(dv.length, 'valeur distincte', 'valeurs distinctes')}${many ? ' (150 premières)' : ''}${nMapped ? ', ' + nMapped + ' remplacée' + (nMapped > 1 ? 's' : '') : ''}</span></summary>
-      ${useful ? '' : '<div class="note" style="margin:8px 0">Colonne très variée : la correspondance sert surtout aux champs Option ou aux codes à renommer.</div>'}
+    vmapHTML = secHTML('map', 'Correspondance des valeurs', open, {
+      hint: `${plural(dv.length, 'valeur distincte', 'valeurs distinctes')}${many ? ' (150 premières)' : ''}${nMapped ? ', ' + nMapped + ' remplacée' + (nMapped > 1 ? 's' : '') : ''}`,
+      body: `${useful ? '' : '<div class="note" style="margin:0 0 8px">Colonne très variée : la correspondance sert surtout aux champs Option ou aux codes à renommer.</div>'}
       <datalist id="${listId}">${targets.map(v => `<option value="${esc(v)}">`).join('')}</datalist>
       <table class="vmap">${rows.map(([v, n, b], i) => `<tr data-i="${i}"><td class="v" title="${esc(v)}">${esc(v === '' ? '(vide)' : v)}</td><td class="n">${n ? nf(n) : ''}</td><td class="a">→</td>
-        <td><input type="text" list="${listId}" data-from="${esc(v)}" value="${esc(b)}" placeholder="inchangée"></td><td class="r">${vmapDot(f, F, v, b)}</td></tr>`).join('')}</table></details>`;
+        <td><input type="text" list="${listId}" data-from="${esc(v)}" value="${esc(b)}" placeholder="inchangée"></td><td class="r">${vmapDot(f, F, v, b)}</td></tr>`).join('')}</table>`,
+    });
   }
-  const fmt = `<div class="sec"><h4>Mise en forme <span><button class="btn small ghost" id="btnCopyFmt">Copier</button><button class="btn small ghost" id="btnPasteFmt" ${S.clip ? '' : 'disabled'}>Coller</button></span></h4>
+  const fmtSum = fmtChips(F, f).filter(([c, l]) => c !== 'sug' && !/corresp\./.test(l)).map(([, l]) => l).join(', ');
+  const fmt = secHTML('fmt', 'Mise en forme', true, {
+    closedHint: esc(fmtSum || 'aucune'),
+    extra: `<button class="btn small ghost" id="btnCopyFmt">Copier</button><button class="btn small ghost" id="btnPasteFmt" ${S.clip ? '' : 'disabled'}>Coller</button>`,
+    body: `
     <div class="row2">
       <label class="fld"><span>Compléter à (caractères)</span><input type="number" id="inPadLen" min="0" max="250" value="${F.padLen || 0}"></label>
       <label class="fld"><span>avec le caractère</span><input type="text" id="inPadChar" maxlength="1" value="${esc(F.padChar || '0')}"></label>
@@ -218,7 +235,8 @@ function renderInspector() {
     <div class="row2">
       <label class="fld"><span>Casse</span><select id="inCase">${[['none', 'Inchangée'], ['upper', 'MAJUSCULES'], ['lower', 'minuscules'], ['title', 'Nom Propre']].map(([k, l]) => `<option value="${k}"${F.case === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="fld"><span>Valeur si vide</span><input type="text" id="inDflt" value="${esc(F.dflt)}" placeholder="${S.map.settings.fillDefaults && f.dflt !== '' ? esc(f.dflt) + ' (défaut BC)' : ''}"></label>
-    </div></div>`;
+    </div>`,
+  });
   el.innerHTML = `<div class="insp-inner" data-k="${esc(f.key)}">
     <h3>${esc(f.caption)}</h3>
     <div class="sub">Colonne ${f.L} du package, type ${esc(typeLabel(ty))}${f.i === 0 ? ', clé primaire' : ''}${f.dflt !== '' ? `, défaut BC <code>${esc(f.dflt)}</code>` : ''}</div>
@@ -228,10 +246,10 @@ function renderInspector() {
       ${srcBlock}
       ${F.auto === 'fuzzy' ? `<div class="note warn" style="margin-top:8px">Association proposée par ressemblance de nom. <button class="btn small" id="btnConfirm">Confirmer</button></div>` : ''}
     </div>
+    ${secHTML('iss', 'Anomalies', true, { body: '<div id="body-iss"></div>' })}
     ${vmapHTML}
     ${kind !== 'none' ? fmt : ''}
-    <div class="sec" id="secPrev"></div>
-    <div class="sec" id="secIssues"></div>
+    ${secHTML('prev', 'Aperçu', true, { body: '<div id="body-prev"></div>' })}
   </div>`;
   refreshInspectorLive();
 }
@@ -248,18 +266,20 @@ function refreshInspectorLive() {
   const t = curT(); const f = t.fields.find(x => x.key === S.ui.f); if (!f) return;
   const ctx = tableCtx(t); const F = getF(t, f);
   const V = S.val[t.name]?.fields[f.key] || {};
-  const sp = $('#secPrev'); const si = $('#secIssues'); if (!sp) return;
-  if (!ctx) { sp.innerHTML = `<h4>Aperçu</h4><div class="note">Choisissez d'abord une feuille source pour cette table.</div>`; si.innerHTML = ''; return; }
+  const sp = $('#body-prev'); const si = $('#body-iss'); if (!sp) return;
+  const secIss = $('#sec-iss'); const hIss = $('#hint-iss'); const hPrev = $('#hint-prev');
+  if (!ctx) { sp.innerHTML = `<div class="note">Choisissez d'abord une feuille source pour cette table.</div>`; hPrev.textContent = ''; secIss.hidden = true; return; }
   const fn = compileField(t, f, F, ctx);
   let rows = '';
   for (let i = 0; i < ctx.rows.length; i++) { const r = fn(ctx.rows[i]);
-    rows += `<tr><td class="rn">${ctx.rowNums[i]}</td><td class="in" title="${esc(r.input ?? '')}">${esc(r.input === undefined ? '' : (r.input || '∅'))}</td><td class="${r.e ? 'bad' : r.d ? 'def' : ''}" title="${esc(r.e || r.w || r.v)}">${esc(r.v === '' ? '∅' : r.v)}${r.w ? ' ⚠' : ''}</td></tr>`; }
-  sp.innerHTML = `<h4>Aperçu <span class="hint">${plural(ctx.rows.length, 'ligne')}</span></h4>
-    <div class="samples-wrap"><table class="samples"><thead><tr><th>Ligne</th><th>Source</th><th>Résultat</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  if (V.err || V.warn) {
-    si.innerHTML = `<h4>Anomalies <span class="hint">${[V.err && plural(V.err, 'erreur'), V.warn && plural(V.warn, 'alerte')].filter(Boolean).join(', ')}</span></h4>
-      <ul class="issues">${V.ex.map(x => `<li><b style="color:var(--${x.lvl === 'err' ? 'err' : 'warn'})">${x.row ? 'Ligne ' + x.row : 'Champ'}</b> : ${esc(x.msg)}</li>`).join('')}</ul>`;
-  } else si.innerHTML = isMapped(F) ? `<h4>Anomalies</h4><div class="note">Aucune anomalie sur les ${nf(ctx.rows.length)} lignes.</div>` : '';
+    rows += `<tr class="${r.e ? 'err' : r.w ? 'warn' : ''}" title="${esc(r.e || r.w || '')}"><td class="rn">${ctx.rowNums[i]}</td><td class="in" title="${esc(r.input ?? '')}">${esc(r.input === undefined ? '' : (r.input || '∅'))}</td><td class="${r.e ? 'bad' : r.d ? 'def' : ''}" title="${esc(r.e || r.w || r.v)}">${esc(r.v === '' ? '∅' : r.v)}</td></tr>`; }
+  hPrev.textContent = plural(ctx.rows.length, 'ligne');
+  sp.innerHTML = `<div class="samples-wrap"><table class="samples"><thead><tr><th>Ligne</th><th>Source</th><th>Résultat</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  secIss.hidden = !(V.err || V.warn || isMapped(F));
+  hIss.innerHTML = V.err || V.warn ? [V.err && `<span class="pill err">${plural(V.err, 'erreur')}</span>`, V.warn && `<span class="pill warn">${plural(V.warn, 'alerte')}</span>`].filter(Boolean).join(' ') : '<span class="pill ok">aucune</span>';
+  si.innerHTML = V.err || V.warn
+    ? `<ul class="issues">${V.ex.map(x => `<li><b style="color:var(--${x.lvl === 'err' ? 'err' : 'warn'})">${x.row ? 'Ligne ' + x.row : 'Champ'}</b> : ${esc(x.msg)}</li>`).join('')}</ul>`
+    : `<div class="note">Aucune anomalie sur les ${nf(ctx.rows.length)} lignes.</div>`;
 }
 function inspectorHelp(t) {
   const T = tm(t); const V = S.val[t.name]; const K = V?.keys;
@@ -270,8 +290,6 @@ function inspectorHelp(t) {
     ${!T.source ? `<div class="sec"><div class="note">Associez une feuille de l'export Navision à cette table avec le sélecteur « Feuille source ».</div></div>` : ''}
     ${K && (K.dup || K.empty) && effectiveMode(t) !== 'keep' ? `<div class="sec"><h4>Clé primaire</h4><ul class="issues">${K.ex.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}
     ${iss.length ? `<div class="sec"><h4>Champs à revoir</h4><ul class="issues">${iss.map(([f, v]) => `<li><a href="#" data-goto="${esc(f.key)}">${esc(f.caption)}</a> : ${[v.err && plural(v.err, 'erreur'), v.warn && plural(v.warn, 'alerte')].filter(Boolean).join(', ')}</li>`).join('')}</ul></div>` : ''}
-    <div class="sec"><h4>Raccourcis</h4><div class="note"><span class="kbd">↑</span> <span class="kbd">↓</span> changer de champ, <span class="kbd">Entrée</span> choisir la colonne, <span class="kbd">Suppr</span> retirer la source, <span class="kbd">Ctrl</span>+<span class="kbd">S</span> exporter le mapping.</div></div>
-    <div class="sec"><h4>Comment les valeurs sont converties</h4><div class="note">Dates au format AAAA-MM-JJ, nombres avec un point décimal, booléens en true/false (Oui/Non reconnus), options selon leur libellé BC, codes en majuscules. Les longueurs maximales viennent des commentaires du package.</div></div>
   </div>`;
 }
 
@@ -350,15 +368,15 @@ function openPicker(anchor, key) {
   inp.focus();
 }
 
-/* ----- filtre des lignes (popover à choix multiples) ----- */
+/* ----- filtre des lignes (popover à choix multiples, comme le filtre Excel : cocher les valeurs conservées) ----- */
 function openFilter(anchor, key) {
   const t = curT(); const f = t.fields.find(x => x.key === key); const ctx = getCtx(tm(t)); const F = getF(t, f);
   if (!ctx || !canFilter(F)) return;
   const vals = sourceValues(F, ctx);
-  const sel = new Set((F.filter || []).map(v => v.toLowerCase()));
   for (const v of F.filter || []) if (!vals.some(([x]) => x.toLowerCase() === v.toLowerCase())) vals.push([v, 0]); // valeur retenue absente de la source
-  openPop(anchor, `<div class="pophead"><input type="search" placeholder="Rechercher…" aria-label="Rechercher une valeur"><button class="btn small ghost" data-clear>Effacer</button></div><ul role="listbox" aria-multiselectable="true"></ul>`, 320);
-  const inp = popEl.querySelector('input'); const ul = popEl.querySelector('ul');
+  const sel = new Set((F.filter || vals.map(([v]) => v)).map(v => v.toLowerCase())); // sans filtre, tout est coché
+  openPop(anchor, `<div class="pophead"><input type="checkbox" id="fltAll" title="Sélectionner tout" aria-label="Sélectionner tout"><input type="search" placeholder="Rechercher…" aria-label="Rechercher une valeur"><button class="btn small ghost" data-clear title="Retirer le filtre">Effacer</button></div><ul role="listbox" aria-multiselectable="true"></ul>`, 320);
+  const inp = popEl.querySelector('input[type=search]'); const ul = popEl.querySelector('ul'); const all = popEl.querySelector('#fltAll');
   let list = [], act = 0; const MAX = 500;
   const draw = () => {
     const q = norm(inp.value);
@@ -369,8 +387,12 @@ function openFilter(anchor, key) {
       + (list.length > MAX ? `<li class="more">${nf(list.length - MAX)} autres valeurs : affinez la recherche.</li>` : '')
       + (list.length ? '' : '<li class="more">Aucune valeur.</li>');
     ul.querySelector('.act')?.scrollIntoView({ block: 'nearest' });
+    // « sélectionner tout » porte sur les valeurs affichées (résultat de la recherche)
+    const n = list.filter(([v]) => sel.has(v.toLowerCase())).length;
+    all.checked = list.length > 0 && n === list.length; all.indeterminate = n > 0 && n < list.length;
   };
-  const apply = () => { const values = vals.map(([v]) => v).filter(v => sel.has(v.toLowerCase())); setField(t, f, { filter: values.length ? values : null }, false); };
+  const apply = () => { const values = vals.map(([v]) => v).filter(v => sel.has(v.toLowerCase())); setField(t, f, { filter: values.length === vals.length ? null : values }, false); };
+  all.addEventListener('change', () => { for (const [v] of list) { if (all.checked) sel.add(v.toLowerCase()); else sel.delete(v.toLowerCase()); } draw(); apply(); inp.focus(); });
   const toggle = i => { const k = list[i][0].toLowerCase(); if (sel.has(k)) sel.delete(k); else sel.add(k); act = i; draw(); apply(); };
   inp.addEventListener('input', () => { act = 0; draw(); });
   inp.addEventListener('keydown', e => {
@@ -381,7 +403,7 @@ function openFilter(anchor, key) {
     else if (e.key === 'Escape') { closePicker(); $(`[data-flt="${CSS.escape(key)}"]`)?.focus(); }
   });
   ul.addEventListener('mousedown', e => { const li = e.target.closest('li[data-i]'); if (li) { e.preventDefault(); toggle(+li.dataset.i); } });
-  popEl.querySelector('[data-clear]').addEventListener('click', () => { sel.clear(); draw(); apply(); inp.focus(); });
+  popEl.querySelector('[data-clear]').addEventListener('click', () => { for (const [v] of vals) sel.add(v.toLowerCase()); draw(); apply(); inp.focus(); });
   draw(); inp.focus();
 }
 
@@ -417,6 +439,18 @@ function selectField(key, focusRow = true) {
   markPreviewCol(false);
   const row = $(`.frow[data-k="${CSS.escape(key)}"]`);
   if (row) { row.scrollIntoView({ block: 'nearest' }); if (focusRow) row.focus({ preventScroll: true }); }
+}
+/* chaque table garde son affichage : mode, filtre, recherche, champ sélectionné et défilement */
+const VIEW_KEYS = ['tab', 'filter', 'q', 'f'];
+function switchTable(i) {
+  if (i === S.ui.t) return;
+  const w = $('#gridwrap');
+  S.ui.views[curT().name] = { ...Object.fromEntries(VIEW_KEYS.map(k => [k, S.ui[k]])), top: w?.scrollTop || 0, left: w?.scrollLeft || 0 };
+  S.ui.t = i;
+  const v = S.ui.views[curT().name] || {};
+  Object.assign(S.ui, { tab: 'map', filter: 'all', q: '', f: null }, Object.fromEntries(VIEW_KEYS.filter(k => k in v).map(k => [k, v[k]])));
+  closePicker(); renderAll();
+  const w2 = $('#gridwrap'); if (w2 && v.top != null) { w2.scrollTop = v.top; w2.scrollLeft = v.left; }
 }
 function validateAll() { S.val = {}; for (const t of S.pkg.tables) validateTable(t); }
 function changeTableSource(t) { ctxCache.clear(); validateTable(t); renderTables(); renderCenter(); renderInspector(); autosave(); }
@@ -454,7 +488,7 @@ function bindApp() {
   bindSashes();
   $('#tables').addEventListener('click', e => {
     const b = e.target.closest('.titem'); if (!b) return;
-    S.ui.t = +b.dataset.t; S.ui.f = null; S.ui.q = ''; closePicker(); renderAll();
+    switchTable(+b.dataset.t);
   });
   const center = $('#center');
   center.addEventListener('change', e => {
@@ -511,11 +545,13 @@ function bindApp() {
   insp.addEventListener('click', e => {
     const go = e.target.closest('[data-goto]'); if (go) { e.preventDefault(); selectField(go.dataset.goto); return; }
     const [t, f] = cur(); if (!f) return;
+    if (e.target.closest('summary button')) e.preventDefault();
+    else { const sum = e.target.closest('summary'); const d = sum?.parentElement; if (d?.dataset.sec) S.ui.open[d.dataset.sec] = !d.open; }
     const k = e.target.closest('[data-kind]');
     if (k) {
       const kind = k.dataset.kind;
       if (kind === 'col') { setField(t, f, { kind: 'col', auto: null }, true); const b = $('#insp [data-pick]'); if (b && !getF(t, f).col) openPicker(b, f.key); }
-      else { setField(t, f, { kind, auto: null, ...(kind === 'const' && f.type.base === 'Boolean' && !getF(t, f)?.value ? { value: 'true' } : {}) }, true); }
+      else setField(t, f, { kind, auto: null }, true);
       return;
     }
     const pick = e.target.closest('[data-pick]'); if (pick) { openPicker(pick, pick.dataset.pick); e.stopPropagation(); return; }

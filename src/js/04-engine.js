@@ -58,10 +58,12 @@ function distinctValues(ctx, colName, limit = 300) {
 
 /* ---------------- filtres de lignes ----------------
    Un champ alimenté par une colonne ou une combinaison peut restreindre les lignes source :
-   F.filter liste les valeurs source conservées, comparées sans tenir compte de la casse. */
+   F.filter liste les valeurs source conservées, comparées sans tenir compte de la casse
+   (null : toutes les lignes ; liste vide : aucune). */
 const canFilter = F => !!F && ((F.kind === 'col' && !!F.col) || (F.kind === 'tpl' && !!F.tpl));
-const filterActive = F => canFilter(F) && Array.isArray(F.filter) && F.filter.length > 0;
+const filterActive = F => canFilter(F) && Array.isArray(F.filter);
 function filterLabel(values) {
+  if (!values.length) return 'aucune';
   return values.slice(0, 2).map(v => v === '' ? '(vide)' : v).join(', ') + (values.length > 2 ? ` +${values.length - 2}` : '');
 }
 function filterSig(t) {
