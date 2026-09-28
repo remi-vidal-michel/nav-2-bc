@@ -499,10 +499,18 @@ const PANES = { l: { min: 170, max: 480 }, r: { min: 280, max: 720 } };
 function bindSashes() {
   const app = $('#app'); let saved = {};
   try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}'); } catch { }
-  const width = side => $(side === 'l' ? '#tables' : '#insp').getBoundingClientRect().width;
+  // largeur dépliée, lue sur la variable pour rester juste quand le panneau est replié
+  const width = side => parseFloat(getComputedStyle(app).getPropertyValue('--w' + side));
   const set = (side, w) => { const p = PANES[side]; app.style.setProperty('--w' + side, Math.round(Math.max(p.min, Math.min(p.max, w))) + 'px'); };
-  const save = () => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({ l: width('l'), r: width('r') })); } catch { } };
-  for (const side in PANES) if (saved[side]) set(side, saved[side]);
+  const folded = side => app.classList.contains('fold-' + side);
+  const save = () => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({ l: width('l'), r: width('r'), fold: { l: folded('l'), r: folded('r') } })); } catch { } };
+  const fold = (side, on) => {
+    app.classList.toggle('fold-' + side, on);
+    const b = $(`.ptoggle[data-fold="${side}"]`); const what = side === 'l' ? 'la liste des tables' : 'le panneau de détail';
+    b.title = (on ? 'Afficher ' : 'Réduire ') + what; b.setAttribute('aria-expanded', String(!on));
+  };
+  for (const side in PANES) { if (saved[side]) set(side, saved[side]); if (saved.fold?.[side]) fold(side, true); }
+  for (const b of $$('.ptoggle')) b.addEventListener('click', () => { closePicker(); fold(b.dataset.fold, !folded(b.dataset.fold)); save(); });
   for (const el of $$('.sash')) {
     const side = el.dataset.side; const dir = side === 'l' ? 1 : -1;
     el.addEventListener('pointerdown', e => {
