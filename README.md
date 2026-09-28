@@ -52,11 +52,11 @@ Les boutons *Alimentés*, *Non alimentés* et *Anomalies* ainsi que le champ **R
 
 Sélectionnez un champ pour ouvrir le panneau de droite. Vous pouvez :
 
-- **Remplacer des valeurs** : l'outil liste les valeurs distinctes de la colonne et vous indiquez par quoi remplacer chacune. C'est indispensable pour les champs *Option* (par exemple « Homme » et « Femme » deviennent « Personne »).
-- **Mettre en forme** : compléter à gauche jusqu'à une longueur (par exemple `42` devient `0000042`), ajouter un préfixe ou un suffixe, changer la casse, définir une valeur si la source est vide.
+- **Remplacer des valeurs** : pour les champs *Option* et *Booléen*, et pour toute colonne d'au plus 10 valeurs distinctes, l'outil liste les valeurs de la colonne et vous indiquez par quoi remplacer chacune (par exemple « Homme » et « Femme » deviennent « Personne »). Pour un booléen, « Oui » et « Non » sont remplacés d'office par `true` et `false`. Pour les autres champs, la liste est vide au départ : **Ajouter une valeur** permet de choisir, parmi les valeurs de la colonne, celles à remplacer.
+- **Mettre en forme** : remplacer un texte par un autre au début, à la fin ou partout (par exemple le `S` initial par `00` : `S20343` devient `0020343`), compléter à gauche jusqu'à une longueur (par exemple `42` devient `0000042`), ajouter un préfixe ou un suffixe, changer la casse, définir une valeur si la source est vide.
 - **Copier et coller la mise en forme** d'un champ à l'autre.
 
-Sous la source, le panneau affiche les lignes en anomalie puis, pour toutes les lignes, la valeur source et le résultat dans une liste défilante ; les lignes en alerte y sont surlignées en jaune, celles en erreur en rouge. Ces sections se replient d'un clic sur leur titre. Repliées, elles gardent l'essentiel en résumé : le nombre d'anomalies, la mise en forme appliquée ou le nombre de lignes.
+Sous la source, le panneau affiche les lignes en anomalie. Ces sections se replient d'un clic sur leur titre. Repliées, elles gardent l'essentiel en résumé : le nombre d'anomalies ou la mise en forme appliquée. Pour voir le résultat ligne à ligne, utilisez le mode **Aperçu du résultat**.
 
 Le mode **Aperçu du résultat** montre la table telle qu'elle sera écrite dans le package. La colonne du champ sélectionné y est mise en évidence. Cliquez sur un en-tête de colonne pour régler ce champ. Dans ce mode, **Rechercher** ne garde que les lignes qui contiennent le texte cherché. Toutes les colonnes restent affichées : les valeurs trouvées et les noms de champs ou de colonnes correspondants sont surlignés. Un clic sur une ligne la met en évidence, pour la suivre plus facilement à l'écran.
 

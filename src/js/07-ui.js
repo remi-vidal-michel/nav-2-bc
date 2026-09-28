@@ -180,6 +180,8 @@ function renderInspector() {
   const el = $('#insp'); const t = curT();
   const f = t.fields.find(x => x.key === S.ui.f);
   if (!f) { el.innerHTML = inspectorHelp(t); return; }
+  // les sections repliées le restent pour ce champ seulement : un autre champ s'ouvre tout déplié
+  const at = t.name + '|' + f.key; if (S.ui.openAt !== at) { S.ui.open = {}; S.ui.openAt = at; }
   const T = tm(t); const ctx = getCtx(T); const F = getF(t, f) || newF(); const kind = F.kind;
   const ty = f.type;
   const optHTML = ty.options ? `<div class="optlist">${ty.options.map(o => `<code title="Valeur ${o.i}">${esc(o.c === '' ? '(vide)' : o.c)}</code>`).join('')}</div>` : '';
@@ -198,21 +200,27 @@ function renderInspector() {
   const targets = ty.base === 'Option' ? ty.options.map(o => o.c) : ty.base === 'Boolean' ? ['true', 'false'] : [];
   let vmapHTML = '';
   if (kind === 'col' && F.col && ctx?.byName.has(F.col)) {
-    const dv = distinctValues(ctx, F.col, 150);
+    // Option, Boolean ou colonne d'au plus 10 valeurs : toutes les valeurs source sont listées ; ailleurs, seulement celles ajoutées à la main
+    const dv = distinctValues(ctx, F.col, Infinity);
+    const all = ['Option', 'Boolean'].includes(ty.base) || dv.length <= 10;
+    const bool = ty.base === 'Boolean';
+    const cnt = new Map(dv.map(([v, n]) => [v.toLowerCase(), n]));
+    if (bool) { // Oui / Non proposés d'office ; une correspondance effacée reste mémorisée (vide) et n'est pas reproposée
+      const known = new Set((F.map || []).map(([a]) => a.trim().toLowerCase()));
+      const add = dv.filter(([v]) => !known.has(v.toLowerCase()) && BOOL_GUESS[norm(v)]).map(([v]) => [v, BOOL_GUESS[norm(v)]]);
+      if (add.length) { F.map = [...(F.map || []), ...add]; refreshRow(t, f); autosave(); }
+    }
     const existing = new Map((F.map || []).map(([a, b]) => [a.trim().toLowerCase(), b]));
-    const shown = new Set(dv.map(([v]) => v.toLowerCase()));
-    const extra = (F.map || []).filter(([a]) => !shown.has(a.trim().toLowerCase()));
-    const rows = dv.map(([v, n]) => [v, n, existing.get(v.toLowerCase()) ?? '']).concat(extra.map(([a, b]) => [a, 0, b]));
-    const many = dv.length >= 150;
-    const useful = ['Option', 'Boolean'].includes(ty.base) || dv.length <= 60;
+    const rows = all
+      ? dv.slice(0, 150).map(([v, n]) => [v, n, existing.get(v.toLowerCase()) ?? '']).concat((F.map || []).filter(([a]) => !cnt.has(a.trim().toLowerCase())).map(([a, b]) => [a, 0, b]))
+      : (F.map || []).map(([a, b]) => [a, cnt.get(a.trim().toLowerCase()) || 0, b]);
     const nMapped = (F.map || []).filter(p => p[1] !== '').length;
-    const open = useful || nMapped > 0;
-    vmapHTML = secHTML('map', 'Correspondance des valeurs', open, {
-      hint: `${plural(dv.length, 'valeur distincte', 'valeurs distinctes')}${many ? ' (150 premières)' : ''}${nMapped ? ', ' + nMapped + ' remplacée' + (nMapped > 1 ? 's' : '') : ''}`,
-      body: `${useful ? '' : '<div class="note" style="margin:0 0 8px">Colonne très variée : la correspondance sert surtout aux champs Option ou aux codes à renommer.</div>'}
-      <datalist id="${listId}">${targets.map(v => `<option value="${esc(v)}">`).join('')}</datalist>
-      <table class="vmap">${rows.map(([v, n, b], i) => `<tr data-i="${i}"><td class="v" title="${esc(v)}">${esc(v === '' ? '(vide)' : v)}</td><td class="n">${n ? nf(n) : ''}</td><td class="a">→</td>
-        <td><input type="text" list="${listId}" data-from="${esc(v)}" value="${esc(b)}" placeholder="inchangée"></td><td class="r">${vmapDot(f, F, v, b)}</td></tr>`).join('')}</table>`,
+    vmapHTML = secHTML('map', 'Correspondance des valeurs', true, {
+      hint: nMapped ? plural(nMapped, 'valeur remplacée', 'valeurs remplacées') : '',
+      body: `<datalist id="${listId}">${targets.map(v => `<option value="${esc(v)}">`).join('')}</datalist>
+      ${rows.length ? `<table class="vmap">${rows.map(([v, n, b], i) => `<tr data-i="${i}"><td class="v" title="${esc(v)}">${esc(v === '' ? '(vide)' : v)}</td><td class="n">${n ? nf(n) : ''}</td><td class="a">→</td>
+        <td><input type="text" list="${listId}" data-from="${esc(v)}"${all && !bool ? '' : ' data-keep'} value="${esc(b)}" placeholder="inchangée"></td><td class="r">${vmapDot(f, F, v, b)}</td>${all ? '' : `<td class="x"><button class="btn small ghost" data-vdel="${esc(v)}" title="Retirer" aria-label="Retirer">×</button></td>`}</tr>`).join('')}</table>` : ''}
+      ${all ? '' : `<button class="btn small" id="btnVmapAdd" style="margin-top:${rows.length ? 8 : 0}px">+ Ajouter une valeur</button>`}`,
     });
   }
   const fmtSum = fmtChips(F, f).filter(([c, l]) => c !== 'sug' && !/corresp\./.test(l)).map(([, l]) => l).join(', ');
@@ -220,6 +228,13 @@ function renderInspector() {
     closedHint: esc(fmtSum || 'aucune'),
     extra: `<button class="btn small ghost" id="btnCopyFmt">Copier</button><button class="btn small ghost" id="btnPasteFmt" ${S.clip ? '' : 'disabled'}>Coller</button>`,
     body: `
+    <div class="row2">
+      <label class="fld"><span>Remplacer</span><input type="text" id="inRepFrom" value="${esc(F.repFrom || '')}" placeholder="ex. S"></label>
+      <label class="fld"><span>par</span><input type="text" id="inRepTo" value="${esc(F.repTo || '')}" placeholder="(rien)"></label>
+    </div>
+    <div class="row2">
+      <label class="fld"><span>Où</span><select id="inRepAt">${[['start', 'Au début'], ['end', 'À la fin'], ['all', 'Partout']].map(([k, l]) => `<option value="${k}"${(F.repAt || 'start') === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+    </div>
     <div class="row2">
       <label class="fld"><span>Compléter à (caractères)</span><input type="number" id="inPadLen" min="0" max="250" value="${F.padLen || 0}"></label>
       <label class="fld"><span>avec le caractère</span><input type="text" id="inPadChar" maxlength="1" value="${esc(F.padChar || '0')}"></label>
@@ -247,7 +262,6 @@ function renderInspector() {
     ${secHTML('iss', 'Anomalies', true, { body: '<div id="body-iss"></div>' })}
     ${vmapHTML}
     ${kind !== 'none' ? fmt : ''}
-    ${secHTML('prev', 'Aperçu', true, { body: '<div id="body-prev"></div>' })}
   </div>`;
   refreshInspectorLive();
 }
@@ -262,22 +276,13 @@ function vmapDot(f, F, from, to) {
 }
 function refreshInspectorLive() {
   const t = curT(); const f = t.fields.find(x => x.key === S.ui.f); if (!f) return;
-  const ctx = tableCtx(t); const F = getF(t, f);
   const V = S.val[t.name]?.fields[f.key] || {};
-  const sp = $('#body-prev'); const si = $('#body-iss'); if (!sp) return;
-  const secIss = $('#sec-iss'); const hIss = $('#hint-iss'); const hPrev = $('#hint-prev');
-  if (!ctx) { sp.innerHTML = `<div class="note">Choisissez d'abord une feuille source pour cette table.</div>`; hPrev.textContent = ''; secIss.hidden = true; return; }
-  const fn = compileField(t, f, F, ctx);
-  let rows = '';
-  for (let i = 0; i < ctx.rows.length; i++) { const r = fn(ctx.rows[i]);
-    rows += `<tr class="${r.e ? 'err' : r.w ? 'warn' : ''}" title="${esc(r.e || r.w || '')}"><td class="rn">${ctx.rowNums[i]}</td><td class="in" title="${esc(r.input ?? '')}">${esc(r.input === undefined ? '' : (r.input || '-'))}</td><td class="${r.e ? 'bad' : r.d ? 'def' : ''}" title="${esc(r.e || r.w || r.v)}">${esc(r.v === '' ? '-' : r.v)}</td></tr>`; }
-  hPrev.textContent = plural(ctx.rows.length, 'ligne');
-  sp.innerHTML = `<div class="samples-wrap"><table class="samples"><thead><tr><th>Ligne</th><th>Source</th><th>Résultat</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  secIss.hidden = !(V.err || V.warn || isMapped(F));
-  hIss.innerHTML = V.err || V.warn ? [V.err && `<span class="pill err">${plural(V.err, 'erreur')}</span>`, V.warn && `<span class="pill warn">${plural(V.warn, 'alerte')}</span>`].filter(Boolean).join(' ') : '<span class="pill ok">aucune</span>';
-  si.innerHTML = V.err || V.warn
-    ? `<ul class="issues">${V.ex.map(x => `<li><b style="color:var(--${x.lvl === 'err' ? 'err' : 'warn'})">${x.row ? 'Ligne ' + x.row : 'Champ'}</b> : ${esc(x.msg)}</li>`).join('')}</ul>`
-    : `<div class="note">Aucune anomalie sur les ${nf(ctx.rows.length)} lignes.</div>`;
+  const si = $('#body-iss'); if (!si) return;
+  const secIss = $('#sec-iss'); const hIss = $('#hint-iss');
+  // la section n'apparaît que s'il y a des anomalies
+  secIss.hidden = !(tableCtx(t) && (V.err || V.warn)); if (secIss.hidden) return;
+  hIss.innerHTML = [V.err && `<span class="pill err">${plural(V.err, 'erreur')}</span>`, V.warn && `<span class="pill warn">${plural(V.warn, 'alerte')}</span>`].filter(Boolean).join(' ');
+  si.innerHTML = `<ul class="issues">${V.ex.map(x => `<li><b style="color:var(--${x.lvl === 'err' ? 'err' : 'warn'})">${x.row ? 'Ligne ' + x.row : 'Champ'}</b> : ${esc(x.msg)}</li>`).join('')}</ul>`;
 }
 function inspectorHelp(t) {
   const T = tm(t); const V = S.val[t.name]; const K = V?.keys;
@@ -402,6 +407,41 @@ function openFilter(anchor, key) {
   });
   ul.addEventListener('mousedown', e => { const li = e.target.closest('li[data-i]'); if (li) { e.preventDefault(); toggle(+li.dataset.i); } });
   popEl.querySelector('[data-clear]').addEventListener('click', () => { for (const [v] of vals) sel.add(v.toLowerCase()); draw(); apply(); inp.focus(); });
+  draw(); inp.focus();
+}
+
+/* ----- correspondance : ajout d'une valeur source à remplacer ----- */
+function openVmapAdd(anchor) {
+  const t = curT(); const f = t.fields.find(x => x.key === S.ui.f); const ctx = getCtx(tm(t)); const F = getF(t, f);
+  if (!ctx || F?.kind !== 'col' || !F.col) return;
+  const taken = new Set((F.map || []).map(([a]) => a.trim().toLowerCase()));
+  const vals = distinctValues(ctx, F.col, Infinity).filter(([v]) => !taken.has(v.toLowerCase())).sort((a, b) => a[0].localeCompare(b[0], 'fr', { numeric: true }));
+  openPop(anchor, `<input type="search" placeholder="Rechercher parmi ${plural(vals.length, 'valeur', 'valeurs')}" aria-label="Rechercher une valeur"><ul role="listbox"></ul>`, 320);
+  const inp = popEl.querySelector('input'); const ul = popEl.querySelector('ul');
+  let list = [], act = 0; const MAX = 500;
+  const draw = () => {
+    const q = norm(inp.value);
+    list = vals.filter(([v]) => !q || norm(v).includes(q));
+    act = Math.max(0, Math.min(act, list.length - 1));
+    ul.innerHTML = list.slice(0, MAX).map(([v, n], i) => `<li role="option" class="${i === act ? 'act' : ''}" data-i="${i}" style="grid-template-columns:1fr auto"><span class="nm">${v === '' ? '<i>(vide)</i>' : esc(v)}</span><span class="cnt">${nf(n)}</span></li>`).join('')
+      + (list.length > MAX ? `<li class="more">${nf(list.length - MAX)} autres valeurs : affinez la recherche.</li>` : '')
+      + (list.length ? '' : '<li class="more">Aucune valeur.</li>');
+    ul.querySelector('.act')?.scrollIntoView({ block: 'nearest' });
+  };
+  const choose = i => {
+    const v = list[i][0]; closePicker();
+    setField(t, f, { map: [...(F.map || []), [v, '']] }, true);
+    $(`#insp [data-from="${CSS.escape(v)}"]`)?.focus();
+  };
+  inp.addEventListener('input', () => { act = 0; draw(); });
+  inp.addEventListener('keydown', e => {
+    const n = Math.min(list.length, MAX); if (!n && e.key !== 'Escape') return;
+    if (e.key === 'ArrowDown') { act = (act + 1) % n; draw(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { act = (act - 1 + n) % n; draw(); e.preventDefault(); }
+    else if (e.key === 'Enter') { choose(act); e.preventDefault(); }
+    else if (e.key === 'Escape') { closePicker(); anchor.focus(); }
+  });
+  ul.addEventListener('mousedown', e => { const li = e.target.closest('li[data-i]'); if (li) { e.preventDefault(); choose(+li.dataset.i); } });
   draw(); inp.focus();
 }
 
@@ -556,20 +596,23 @@ function bindApp() {
     }
     const pick = e.target.closest('[data-pick]'); if (pick) { openPicker(pick, pick.dataset.pick); e.stopPropagation(); return; }
     if (e.target.id === 'btnConfirm') { setField(t, f, { auto: null }, true); return; }
+    if (e.target.id === 'btnVmapAdd') { openVmapAdd(e.target); e.stopPropagation(); return; }
+    const vdel = e.target.closest('[data-vdel]');
+    if (vdel) { const k = vdel.dataset.vdel.trim().toLowerCase(); const F = getF(t, f); setField(t, f, { map: (F.map || []).filter(([a]) => a.trim().toLowerCase() !== k) }, true); return; }
     if (e.target.id === 'btnPadHint') { setField(t, f, { padLen: f.padHint, padNum: true }, true); return; }
-    if (e.target.id === 'btnCopyFmt') { const F = getF(t, f) || newF(); S.clip = { case: F.case, padLen: F.padLen, padChar: F.padChar, padNum: F.padNum, prefix: F.prefix, suffix: F.suffix, dflt: F.dflt }; renderInspector(); toast('Format copié. Sélectionnez un autre champ puis « Coller ».'); return; }
+    if (e.target.id === 'btnCopyFmt') { const F = getF(t, f) || newF(); S.clip = { case: F.case, repFrom: F.repFrom, repTo: F.repTo, repAt: F.repAt, padLen: F.padLen, padChar: F.padChar, padNum: F.padNum, prefix: F.prefix, suffix: F.suffix, dflt: F.dflt }; renderInspector(); toast('Format copié. Sélectionnez un autre champ puis « Coller ».'); return; }
     if (e.target.id === 'btnPasteFmt' && S.clip) { setField(t, f, { ...S.clip }, true); toast('Format appliqué.'); return; }
   });
   insp.addEventListener('input', e => {
     const [t, f] = cur(); if (!f) return; const id = e.target.id;
-    const map = { inConst: 'value', inTpl: 'tpl', inPrefix: 'prefix', inSuffix: 'suffix', inDflt: 'dflt', inPadChar: 'padChar' };
+    const map = { inConst: 'value', inTpl: 'tpl', inPrefix: 'prefix', inSuffix: 'suffix', inDflt: 'dflt', inPadChar: 'padChar', inRepFrom: 'repFrom', inRepTo: 'repTo' };
     if (map[id]) return liveInput(t, f, { [map[id]]: e.target.value });
     if (id === 'inPadLen') return liveInput(t, f, { padLen: Math.max(0, Math.min(250, +e.target.value || 0)) });
     if (e.target.dataset.from !== undefined) {
       const from = e.target.dataset.from; const to = e.target.value;
       const F = getF(t, f) || newF();
       const m = (F.map || []).filter(([a]) => a.trim().toLowerCase() !== from.trim().toLowerCase());
-      if (to !== '') m.push([from, to]);
+      if (to !== '' || e.target.dataset.keep !== undefined) m.push([from, to]); // ligne ajoutée à la main : conservée même vide
       tm(t).fields[f.key] = { ...F, map: m };
       const dotCell = e.target.closest('tr').querySelector('.r'); dotCell.innerHTML = vmapDot(f, F, from, to);
       liveInput(t, f, {});
@@ -578,6 +621,7 @@ function bindApp() {
   insp.addEventListener('change', e => {
     const [t, f] = cur(); if (!f) return; const id = e.target.id;
     if (id === 'inCase') setField(t, f, { case: e.target.value }, false);
+    else if (id === 'inRepAt') setField(t, f, { repAt: e.target.value }, false);
     else if (id === 'inPadNum') setField(t, f, { padNum: e.target.checked }, false);
     else if (id === 'inConst' && e.target.tagName === 'SELECT') setField(t, f, { value: e.target.value }, false);
     else if (id === 'selTplCol' && e.target.value) {

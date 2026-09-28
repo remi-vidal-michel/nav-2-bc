@@ -46,6 +46,8 @@ function parseDate(s) {
 }
 const TRUE_W = new Set(['true', 'oui', 'yes', 'vrai', '1', 'x', 'o', 'y', 'ja', 'si']);
 const FALSE_W = new Set(['false', 'non', 'no', 'faux', '0', 'n', 'nein']);
+/* correspondances proposées d'office pour les champs Boolean (clé normalisée -> valeur BC) */
+const BOOL_GUESS = { oui: 'true', non: 'false' };
 function optionIndex(ty) {
   if (ty._idx) return ty._idx;
   const byNorm = new Map(); const byNum = new Map();

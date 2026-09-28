@@ -3,7 +3,7 @@
 
 /* ---------------- modèle de mapping ---------------- */
 function newMap() { return { app: APP_ID, version: MAP_VERSION, settings: defaultSettings(), tables: {} }; }
-const newF = () => ({ kind: 'none', col: '', value: '', tpl: '', map: [], case: 'none', padLen: 0, padChar: '0', padNum: true, prefix: '', suffix: '', dflt: '', filter: null });
+const newF = () => ({ kind: 'none', col: '', value: '', tpl: '', map: [], case: 'none', repFrom: '', repTo: '', repAt: 'start', padLen: 0, padChar: '0', padNum: true, prefix: '', suffix: '', dflt: '', filter: null });
 function tm(t) { return (S.map.tables[t.name] ||= { source: null, headerRow: 1, mode: 'keep', fields: {} }); }
 function getF(t, f) { return tm(t).fields[f.key] || null; }
 function isMapped(F) { return !!F && ((F.kind === 'col' && !!F.col) || (F.kind === 'const') || (F.kind === 'tpl' && !!F.tpl)); }
@@ -11,6 +11,7 @@ function fmtChips(F, f) {
   const c = []; if (!F) return c;
   if (F.auto === 'fuzzy') c.push(['sug', 'à vérifier']);
   if (F.map?.some(p => p[1] !== '')) c.push(['', `${F.map.filter(p => p[1] !== '').length} corresp.`]);
+  if (F.repFrom) c.push(['', 'remplacement']);
   if (F.padLen > 0) c.push(['', `${F.padChar || '0'}→${F.padLen}`]);
   if (F.case && F.case !== 'none') c.push(['', { upper: 'MAJ', lower: 'min', title: 'Nom propre' }[F.case]]);
   if (F.prefix) c.push(['', 'préfixe']); if (F.suffix) c.push(['', 'suffixe']);
@@ -113,6 +114,13 @@ function sourceGetter(F, ctx) {
   return { get: null };
 }
 function titleCase(s) { return s.toLowerCase().replace(/(^|[\s\-'’(\/])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()); }
+/* remplacement d'un texte par un autre, au début, à la fin ou partout (sensible à la casse) */
+function replaceText(s, from, to, at) {
+  if (!from) return s;
+  if (at === 'start') return s.startsWith(from) ? to + s.slice(from.length) : s;
+  if (at === 'end') return s.endsWith(from) ? s.slice(0, s.length - from.length) + to : s;
+  return s.split(from).join(to);
+}
 function compileField(t, f, F, ctx) {
   const set = S.map.settings;
   const dflt = set.fillDefaults ? f.dflt : '';
@@ -125,9 +133,11 @@ function compileField(t, f, F, ctx) {
   for (const [a, b] of (F.map || [])) if (b !== '' && b != null) vmap.set(String(a).trim().toLowerCase(), b);
   const padLen = +F.padLen || 0, padChar = (F.padChar || '0')[0], padNum = F.padNum !== false;
   const kase = F.case || 'none', prefix = F.prefix || '', suffix = F.suffix || '', ifEmpty = F.dflt || '';
+  const repFrom = F.repFrom || '', repTo = F.repTo || '', repAt = F.repAt || 'start';
   return row => {
     let s = get(row).trim(); const input = s;
     if (vmap.size) { const k = s.toLowerCase(); if (vmap.has(k)) s = vmap.get(k); }
+    if (repFrom) s = replaceText(s, repFrom, repTo, repAt);
     if (s === '') {
       if (ifEmpty !== '') { const r = convertTo(f, ifEmpty, set); return { v: r.v, e: r.e, w: r.w, input, d: false }; }
       return { v: dflt, d: dflt !== '', input, empty: true };
