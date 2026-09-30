@@ -61,7 +61,7 @@ function factsHTML(t) {
   const T = tm(t); const ctx = tableCtx(t); const mode = effectiveMode(t);
   const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
   const K = S.val[t.name]?.keys;
-  const keyNote = K && mode !== 'keep' && (K.dup || K.empty) ? `<span style="color:var(--err)"><b style="color:inherit">Clé ${esc(t.fields[0].caption)}</b> : ${[K.dup && plural(K.dup, 'doublon'), K.empty && plural(K.empty, 'valeur vide', 'valeurs vides')].filter(Boolean).join(', ')}</span>` : '';
+  const keyNote = K && mode !== 'keep' && (K.dup || K.empty) ? `<span style="color:var(--err)"><b style="color:inherit">Clé ${esc(keyLabel(t))}</b> : ${[K.dup && plural(K.dup, 'doublon'), K.empty && plural(K.empty, 'valeur vide', 'valeurs vides')].filter(Boolean).join(', ')}</span>` : '';
   return `<span><b>${ctx ? nf(ctx.rows.length) : 0}</b> lignes source${ctx?.total !== undefined ? ` filtrées / ${nf(ctx.total)}` : ''}</span>
       <span><b>${nf(t.existing.length)}</b> lignes déjà dans le package</span>
       <span><b>${mapped}</b> / ${t.fields.length} champs alimentés</span>
@@ -92,7 +92,7 @@ function fieldRowHTML(t, f) {
     : `<button class="srcbtn fltbtn" data-flt="${esc(f.key)}" title="Filtrer les lignes sur les valeurs de ce champ">${ICON_FUNNEL}<span></span>${ICON_CHEV}</button>`;
   const st = [V.err ? `<span class="pill err" title="Lignes en erreur">${nf(V.err)}</span>` : '', V.warn ? `<span class="pill warn" title="Lignes avec alerte">${nf(V.warn)}</span>` : ''].join('');
   return `<div class="grow frow${m ? ' mapped' : ''}${sel ? ' sel' : ''}" data-k="${esc(f.key)}" tabindex="${sel ? 0 : -1}">
-    <div><span class="fcap" title="${esc(f.caption)}">${esc(f.caption)}</span><span class="ftype"><code>${f.L}</code> ${esc(typeLabel(f.type))}${f.i === 0 ? '<span class="key">clé</span>' : ''}</span></div>
+    <div><span class="fcap" title="${esc(f.caption)}">${esc(f.caption)}</span><span class="ftype"><code>${f.L}</code> ${esc(typeLabel(f.type))}${isKeyField(t, f) ? '<span class="key">clé</span>' : ''}</span></div>
     <div><button class="srcbtn ${cls}" data-pick="${esc(f.key)}" title="${esc(srcTxt)}"><span>${esc(srcTxt)}</span>${ICON_CHEV}</button></div>
     <div class="chips">${chips}</div>
     <div class="flt">${flt}</div>
@@ -252,9 +252,10 @@ function renderInspector() {
     </div>`,
   });
   el.innerHTML = `<div class="insp-inner" data-k="${esc(f.key)}">
-    <h3>${esc(f.caption)} <span class="ftype">${esc(typeLabel(ty))}${f.i === 0 ? '<span class="key">clé</span>' : ''}</span></h3>
+    <h3>${esc(f.caption)} <span class="ftype">${esc(typeLabel(ty))}${isKeyField(t, f) ? '<span class="key">clé</span>' : ''}</span></h3>
     ${f.dflt !== '' ? `<div class="sub">Défaut BC <code>${esc(f.dflt)}</code></div>` : ''}
     ${optHTML}
+    <label class="chk keychk"><input type="checkbox" id="inKey" ${isKeyField(t, f) ? 'checked' : ''}> Fait partie de la clé primaire</label>
     <div class="sec"><h4>Source</h4>
       <div class="seg" id="segKind" style="margin-bottom:10px">${[['col', 'Colonne'], ['const', 'Constante'], ['tpl', 'Combinaison'], ['none', 'Aucune']].map(([k, l]) => `<button data-kind="${k}" aria-pressed="${kind === k}">${l}</button>`).join('')}</div>
       ${srcBlock}
@@ -292,7 +293,8 @@ function inspectorHelp(t) {
     <h3>${esc(t.name)}</h3>
     <div class="sub">Sélectionnez un champ pour régler sa source et sa mise en forme.</div>
     ${!T.source ? `<div class="sec"><div class="note">Associez une feuille de l'export Navision à cette table avec le sélecteur « Feuille source ».</div></div>` : ''}
-    ${K && (K.dup || K.empty) && effectiveMode(t) !== 'keep' ? `<div class="sec"><h4>Clé primaire</h4><ul class="issues">${K.ex.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}
+    <div class="sec"><h4>Clé primaire</h4><div class="note">${esc(keyLabel(t))}. Cochez « Fait partie de la clé primaire » dans le détail d'un champ pour la modifier.</div>
+      ${K && (K.dup || K.empty) && effectiveMode(t) !== 'keep' ? `<ul class="issues">${K.ex.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}</div>
     ${iss.length ? `<div class="sec"><h4>Champs à revoir</h4><ul class="issues">${iss.map(([f, v]) => `<li><a href="#" data-goto="${esc(f.key)}">${esc(f.caption)}</a> : ${[v.err && plural(v.err, 'erreur'), v.warn && plural(v.warn, 'alerte')].filter(Boolean).join(', ')}</li>`).join('')}</ul></div>` : ''}
   </div>`;
 }
@@ -471,6 +473,17 @@ function afterFieldChange(t, f, full) {
   autosave();
 }
 function refreshFacts(t) { const el = $('#facts'); if (el) el.innerHTML = factsHTML(t); }
+/* ajoute ou retire un champ de la clé primaire, puis recontrôle l'unicité */
+function setKeyField(t, f, box) {
+  const cur = keyFields(t);
+  const next = box.checked ? t.fields.filter(x => cur.includes(x) || x === f) : cur.filter(x => x !== f);
+  if (!next.length) { box.checked = true; toast('La clé primaire doit contenir au moins un champ.'); return; }
+  const T = tm(t); const before = cur;
+  T.keys = next.map(x => x.key);
+  (S.val[t.name] ||= { fields: {}, keys: null }).keys = checkKeys(t);
+  for (const x of new Set([...before, ...next])) refreshRow(t, x);
+  renderTables(); refreshFacts(t); renderInspector(); autosave();
+}
 function selectField(key, focusRow = true) {
   if (S.ui.f !== key) $('#insp').scrollTop = 0;
   S.ui.f = key;
@@ -630,6 +643,7 @@ function bindApp() {
   });
   insp.addEventListener('change', e => {
     const [t, f] = cur(); if (!f) return; const id = e.target.id;
+    if (id === 'inKey') return setKeyField(t, f, e.target);
     if (id === 'inCase') setField(t, f, { case: e.target.value }, false);
     else if (id === 'inRepAt') setField(t, f, { repAt: e.target.value }, false);
     else if (id === 'inPadNum') setField(t, f, { padNum: e.target.checked }, false);

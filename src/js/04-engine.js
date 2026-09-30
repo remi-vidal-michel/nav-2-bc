@@ -4,7 +4,7 @@
 /* ---------------- modèle de mapping ---------------- */
 function newMap() { return { app: APP_ID, version: MAP_VERSION, settings: defaultSettings(), tables: {} }; }
 const newF = () => ({ kind: 'none', col: '', value: '', tpl: '', map: [], case: 'none', repFrom: '', repTo: '', repAt: 'start', padLen: 0, padChar: '0', padNum: true, prefix: '', suffix: '', dflt: '', filter: null });
-function tm(t) { return (S.map.tables[t.name] ||= { source: null, headerRow: 1, mode: 'keep', fields: {} }); }
+function tm(t) { return (S.map.tables[t.name] ||= { source: null, headerRow: 1, mode: 'keep', keys: null, fields: {} }); }
 function getF(t, f) { return tm(t).fields[f.key] || null; }
 function isMapped(F) { return !!F && ((F.kind === 'col' && !!F.col) || (F.kind === 'const') || (F.kind === 'tpl' && !!F.tpl)); }
 function fmtChips(F, f) {
@@ -169,16 +169,26 @@ function checkField(t, f) {
   }
   return out;
 }
+/* clé primaire : champs désignés par l'utilisateur (T.keys), le premier champ du package à défaut */
+function keyFields(t) {
+  const K = tm(t).keys; const fs = Array.isArray(K) ? t.fields.filter(f => K.includes(f.key)) : [];
+  return fs.length ? fs : t.fields.slice(0, 1);
+}
+const isKeyField = (t, f) => keyFields(t).includes(f);
+const keyLabel = t => keyFields(t).map(f => f.caption).join(' + ');
 function checkKeys(t) {
-  const T = tm(t); const ctx = tableCtx(t); const f = t.fields[0];
-  if (!ctx || !f) return null;
-  const fn = compileField(t, f, getF(t, f), ctx);
+  const T = tm(t); const ctx = tableCtx(t); const kf = keyFields(t);
+  if (!ctx || !kf.length) return null;
+  const fns = kf.map(f => compileField(t, f, getF(t, f), ctx));
+  const SEP = ''; const show = v => v.split(SEP).map(x => x === '' ? '(vide)' : x).join(' | ');
   const seen = new Map(); let empty = 0, dup = 0; const ex = [];
-  if (T.mode === 'append') for (const r of t.existing) seen.set(r[0], 'package');
+  if (T.mode === 'append') for (const r of t.existing) seen.set(kf.map(f => r[f.i]).join(SEP), 'package');
   for (let i = 0; i < ctx.rows.length; i++) {
-    const v = fn(ctx.rows[i]).v;
-    if (v === '') { empty++; if (ex.length < 6) ex.push(`ligne ${ctx.rowNums[i]} : clé vide`); continue; }
-    if (seen.has(v)) { dup++; if (ex.length < 6) ex.push(`ligne ${ctx.rowNums[i]} : « ${v} » déjà présent ${seen.get(v) === 'package' ? 'dans le package' : `(ligne ${seen.get(v)})`}`); }
+    const vs = fns.map(fn => fn(ctx.rows[i]).v);
+    // une partie vide est admise dans une clé composée ; la clé entièrement vide ne l'est pas
+    if (vs.every(v => v === '')) { empty++; if (ex.length < 6) ex.push(`ligne ${ctx.rowNums[i]} : clé vide`); continue; }
+    const v = vs.join(SEP);
+    if (seen.has(v)) { dup++; if (ex.length < 6) ex.push(`ligne ${ctx.rowNums[i]} : « ${show(v)} » déjà présent ${seen.get(v) === 'package' ? 'dans le package' : `(ligne ${seen.get(v)})`}`); }
     else seen.set(v, ctx.rowNums[i]);
   }
   return { empty, dup, ex };
@@ -187,7 +197,7 @@ function validateTable(t, onlyKey) {
   const V = (S.val[t.name] ||= { fields: {}, keys: null });
   const fs = onlyKey ? t.fields.filter(f => f.key === onlyKey) : t.fields;
   for (const f of fs) V.fields[f.key] = checkField(t, f);
-  if (!onlyKey || onlyKey === t.fields[0]?.key) V.keys = checkKeys(t);
+  if (!onlyKey || keyFields(t).some(f => f.key === onlyKey)) V.keys = checkKeys(t);
   return V;
 }
 function tableIssues(t) {

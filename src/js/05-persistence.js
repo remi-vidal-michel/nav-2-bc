@@ -20,7 +20,7 @@ function validateMapping(obj) {
       const filter = Array.isArray(F.filter) ? F.filter.map(String) : null;
       fields[k] = { ...newF(), ...F, filter, map: Array.isArray(F.map) ? F.map.filter(p => Array.isArray(p) && p.length === 2).map(p => [String(p[0]), String(p[1])]) : [] };
     }
-    m.tables[tn] = { source: T.source ?? null, headerRow: +T.headerRow || 1, mode: ['replace', 'append', 'keep'].includes(T.mode) ? T.mode : 'keep', fields };
+    m.tables[tn] = { source: T.source ?? null, headerRow: +T.headerRow || 1, mode: ['replace', 'append', 'keep'].includes(T.mode) ? T.mode : 'keep', keys: Array.isArray(T.keys) && T.keys.length ? T.keys.map(String) : null, fields };
   }
   return m;
 }

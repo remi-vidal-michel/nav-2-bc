@@ -195,6 +195,7 @@ aside.insp{overflow:auto;min-height:0}
 .insp h3{margin:0;font-size:18px;font-weight:650;word-break:break-word;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .insp h3 .ftype{font-size:13px;font-weight:400}
 .insp .sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+.insp label.keychk{font-size:13px;margin:8px 0 2px}
 #segKind{display:flex}
 #segKind button{flex:1;padding:0 6px}
 .sec{border-top:1px solid var(--line2);margin-top:16px;padding-top:14px}

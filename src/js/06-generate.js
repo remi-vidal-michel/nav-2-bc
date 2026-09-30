@@ -78,7 +78,7 @@ function reportCSV() {
       const fn = compileField(t, f, getF(t, f), ctx);
       ctx.rows.forEach((row, i) => { const r = fn(row); if (r.e || r.w) lines.push([t.name, ctx.rowNums[i], f.caption, r.input ?? '', r.v, r.e ? 'Erreur' : 'Alerte', r.e || r.w]); });
     }
-    const K = S.val[t.name]?.keys; if (K) for (const e of K.ex) lines.push([t.name, '', t.fields[0].caption, '', '', 'Erreur', e]);
+    const K = S.val[t.name]?.keys; if (K) for (const e of K.ex) lines.push([t.name, '', keyLabel(t), '', '', 'Erreur', e]);
   }
   const csv = lines.map(l => l.map(v => { v = String(v ?? ''); return /[;"\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(';')).join('\r\n');
   download(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }), `anomalies_NAV-BC_${stamp()}.csv`);
