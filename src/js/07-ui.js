@@ -4,6 +4,7 @@
 /* ---------------- rendu ---------------- */
 const ICON_CHEV = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6l4 4 4-4"/></svg>';
 const ICON_SEARCH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
+const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 const ICON_FUNNEL = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 3h12l-4.5 5.5V13l-3 1.5v-6L2 3z"/></svg>';
 function curT() { return S.pkg.tables[S.ui.t]; }
 function typeLabel(ty) { return ty.base + (ty.len ? `[${ty.len}]` : ''); }
@@ -40,19 +41,19 @@ function renderCenter() {
         <option value="append"${T.mode === 'append' ? ' selected' : ''}>Ajouter à l'existant</option>
         <option value="keep"${T.mode === 'keep' ? ' selected' : ''}>Laisser inchangées</option></select></label>
       <button class="btn" id="btnAuto" ${ctx ? '' : 'disabled'} title="Associe les colonnes dont le nom correspond">Mapper automatiquement</button>
-      <button class="btn ghost" id="btnClear" title="Retirer toutes les correspondances de cette table">Tout effacer</button>
+      <button class="btn ghost icon danger" id="btnClear" title="Retirer toutes les correspondances de cette table" aria-label="Tout effacer">${ICON_TRASH}</button>
     </div>
   </div>
   <div class="toolbar">
+    <label class="search">${ICON_SEARCH}<input type="search" id="inSearch" placeholder="Rechercher" aria-label="${S.ui.tab === 'map' ? 'Rechercher un champ ou une colonne' : 'Rechercher un champ, une colonne ou une valeur'}" value="${esc(S.ui.q)}"></label>
     <div class="seg" role="tablist">
       <button role="tab" data-tab="map" aria-selected="${S.ui.tab === 'map'}">Correspondances</button>
       <button role="tab" data-tab="prev" aria-selected="${S.ui.tab === 'prev'}">Aperçu du résultat</button>
     </div>
     <div class="spacer"></div>
-    <div class="seg" id="segFilter" ${S.ui.tab === 'map' ? '' : 'hidden'}>
-      ${[['all', 'Tous'], ['mapped', 'Alimentés'], ['unmapped', 'Non alimentés'], ['issues', 'Anomalies']].map(([k, l]) => `<button data-filter="${k}" aria-pressed="${S.ui.filter === k}">${l}</button>`).join('')}
-    </div>
-    <label class="search">${ICON_SEARCH}<input type="search" id="inSearch" placeholder="Rechercher" aria-label="${S.ui.tab === 'map' ? 'Rechercher un champ ou une colonne' : 'Rechercher un champ, une colonne ou une valeur'}" value="${esc(S.ui.q)}"></label>
+    <select id="selFilter" aria-label="Champs affichés" ${S.ui.tab === 'map' ? '' : 'hidden'}>
+      ${[['all', 'Tous les champs'], ['mapped', 'Alimentés'], ['unmapped', 'Non alimentés'], ['issues', 'Anomalies']].map(([k, l]) => `<option value="${k}"${S.ui.filter === k ? ' selected' : ''}>${l}</option>`).join('')}
+    </select>
   </div>
   <div class="gridwrap" id="gridwrap"></div>`;
   renderGrid();
@@ -568,6 +569,7 @@ function bindApp() {
       } else T.mode = 'keep';
       changeTableSource(t);
     } else if (e.target.id === 'inHdr') { T.headerRow = Math.max(1, +e.target.value || 1); changeTableSource(t); }
+    else if (e.target.id === 'selFilter') { S.ui.filter = e.target.value; renderGrid(); }
     else if (e.target.id === 'selMode') {
       T.mode = e.target.value; validateTable(t); renderTables(); renderCenter(); autosave();
       if (T.mode === 'replace' && t.existing.length) toast(`Les ${nf(t.existing.length)} lignes actuelles de « ${t.name} » seront remplacées.`);
@@ -579,7 +581,6 @@ function bindApp() {
     const th = e.target.closest('.ptable th[data-k]'); if (th) { selectField(th.dataset.k, false); return; }
     const tr = e.target.closest('.ptable tbody tr'); // sélection de ligne, purement visuelle
     if (tr) { S.ui.row = +tr.dataset.r; $$('.ptable tr.rsel').forEach(x => x.classList.remove('rsel')); tr.classList.add('rsel'); return; }
-    const flt = e.target.closest('[data-filter]'); if (flt) { S.ui.filter = flt.dataset.filter; $$('#segFilter button').forEach(b => b.setAttribute('aria-pressed', b === flt)); renderGrid(); return; }
     if (e.target.closest('#btnAuto')) {
       const n = autoMapTable(t); validateTable(t); renderAll(); autosave();
       toast(n ? `${plural(n, 'nouveau champ associé', 'nouveaux champs associés')}. Les associations « à vérifier » sont signalées.` : 'Aucune nouvelle correspondance trouvée par le nom.');
