@@ -110,7 +110,7 @@ aside.tables h3{display:flex;align-items:center;min-height:28px;font-size:12px;c
 .pill.mute{background:var(--line2);color:var(--muted)}
 
 main.center{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--panel);overflow:hidden}
-.thead{padding:14px 18px 10px;border-bottom:1px solid var(--line2)}
+.thead{padding:12px 10px 10px;border-bottom:1px solid var(--line2)}
 .thead h2{margin:0;font-size:19px;font-weight:650;display:flex;align-items:baseline;gap:10px 14px;flex-wrap:wrap}
 .controls{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;margin-top:12px}
 .ctl{display:flex;flex-direction:column;gap:3px}
@@ -119,7 +119,7 @@ main.center{display:flex;flex-direction:column;min-width:0;min-height:0;backgrou
 .ctl input[type=number]{width:70px}
 .facts{font-size:12.5px;color:var(--muted);font-weight:400;display:flex;gap:14px;flex-wrap:wrap}
 .facts b{color:var(--ink);font-weight:600}
-.toolbar{display:flex;align-items:center;gap:8px;padding:8px 18px;border-bottom:1px solid var(--line2);flex-wrap:wrap}
+.toolbar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line2);flex-wrap:wrap}
 .seg{display:inline-flex;border:1px solid var(--field-line);border-radius:6px;overflow:hidden}
 .seg button{border:0;background:var(--field);height:28px;padding:0 10px;cursor:pointer;font-size:13px;border-right:1px solid var(--field-line)}
 .seg button:last-child{border-right:0}
@@ -190,8 +190,8 @@ mark{background:rgba(255,214,0,.4);color:inherit;border-radius:2px}
 
 /* inspector */
 aside.insp{overflow:auto;min-height:0}
-.insp-inner>h3{padding-right:30px}
-.insp-inner{padding:16px 18px 40px}
+.insp-inner>h3{padding-right:34px}
+.insp-inner{padding:12px 10px 40px}
 .insp h3{margin:0;font-size:18px;font-weight:650;word-break:break-word;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .insp h3 .ftype{font-size:13px;font-weight:400}
 .insp .sub{font-size:12.5px;color:var(--muted);margin-top:2px}

@@ -200,8 +200,9 @@ function renderInspector() {
   const targets = ty.base === 'Option' ? ty.options.map(o => o.c) : ty.base === 'Boolean' ? ['true', 'false'] : [];
   let vmapHTML = '';
   if (kind === 'col' && F.col && ctx?.byName.has(F.col)) {
-    // Option, Boolean ou colonne d'au plus 10 valeurs : toutes les valeurs source sont listées ; ailleurs, seulement celles ajoutées à la main
-    const dv = distinctValues(ctx, F.col, Infinity);
+    // Option, Boolean ou colonne d'au plus 10 valeurs : toutes les valeurs source sont listées ; ailleurs, seulement celles ajoutées à la main.
+    // Seules comptent les lignes retenues par les filtres de la table.
+    const dv = distinctValues(tableCtx(t), F.col, Infinity);
     const all = ['Option', 'Boolean'].includes(ty.base) || dv.length <= 10;
     const bool = ty.base === 'Boolean';
     const cnt = new Map(dv.map(([v, n]) => [v.toLowerCase(), n]));
@@ -412,7 +413,7 @@ function openFilter(anchor, key) {
 
 /* ----- correspondance : ajout d'une valeur source à remplacer ----- */
 function openVmapAdd(anchor) {
-  const t = curT(); const f = t.fields.find(x => x.key === S.ui.f); const ctx = getCtx(tm(t)); const F = getF(t, f);
+  const t = curT(); const f = t.fields.find(x => x.key === S.ui.f); const ctx = tableCtx(t); const F = getF(t, f);
   if (!ctx || F?.kind !== 'col' || !F.col) return;
   const taken = new Set((F.map || []).map(([a]) => a.trim().toLowerCase()));
   const vals = distinctValues(ctx, F.col, Infinity).filter(([v]) => !taken.has(v.toLowerCase())).sort((a, b) => a[0].localeCompare(b[0], 'fr', { numeric: true }));
@@ -457,7 +458,8 @@ function setField(t, f, patch, full) {
   validateTable(t); renderTables();
   if (S.ui.tab === 'prev') renderGrid(); else for (const x of t.fields) refreshRow(t, x);
   refreshFacts(t);
-  if (full) renderInspector(); else refreshInspectorLive();
+  // un changement de filtre modifie les valeurs proposées dans la correspondance
+  if (full || 'filter' in patch) renderInspector(); else refreshInspectorLive();
   autosave();
 }
 function afterFieldChange(t, f, full) {
