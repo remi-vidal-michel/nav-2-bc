@@ -2,7 +2,15 @@
 /* 04-engine.js : Modèle de mapping, contexte source, moteur de transformation, contrôles, mapping automatique. */
 
 /* ---------------- modèle de mapping ---------------- */
-function newMap() { return { app: APP_ID, version: MAP_VERSION, settings: defaultSettings(), tables: {} }; }
+function newMap() { return { app: APP_ID, version: MAP_VERSION, settings: defaultSettings(), globalMap: [], tables: {} }; }
+/* correspondances globales (valeur source -> valeur BC), indexées sur la valeur source en minuscules ;
+   le tableau S.map.globalMap est remplacé à chaque modification, ce qui invalide l'index */
+let gmapCache = [null, null];
+function globalMapIndex() {
+  const g = S.map?.globalMap || [];
+  if (gmapCache[0] !== g) gmapCache = [g, new Map(g.filter(p => p[1] !== '').map(([a, b]) => [a.trim().toLowerCase(), b]))];
+  return gmapCache[1];
+}
 const newF = () => ({ kind: 'none', col: '', value: '', tpl: '', map: [], case: 'none', repFrom: '', repTo: '', repAt: 'start', padLen: 0, padChar: '0', padNum: true, prefix: '', suffix: '', dflt: '', filter: null });
 function tm(t) { return (S.map.tables[t.name] ||= { source: null, headerRow: 1, mode: 'keep', keys: null, fields: {} }); }
 function getF(t, f) { return tm(t).fields[f.key] || null; }
@@ -131,29 +139,31 @@ function compileField(t, f, F, ctx) {
   }
   const vmap = new Map();
   for (const [a, b] of (F.map || [])) if (b !== '' && b != null) vmap.set(String(a).trim().toLowerCase(), b);
+  // les correspondances globales ne portent que sur les valeurs venues de la source, pas sur les constantes
+  const gmap = F.kind === 'col' || F.kind === 'tpl' ? globalMapIndex() : new Map();
   const padLen = +F.padLen || 0, padChar = (F.padChar || '0')[0], padNum = F.padNum !== false;
   const kase = F.case || 'none', prefix = F.prefix || '', suffix = F.suffix || '', ifEmpty = F.dflt || '';
   const repFrom = F.repFrom || '', repTo = F.repTo || '', repAt = F.repAt || 'start';
   return row => {
-    let s = get(row).trim(); const input = s;
-    if (vmap.size) { const k = s.toLowerCase(); if (vmap.has(k)) s = vmap.get(k); }
+    let s = get(row).trim(); const input = s; let g = false;
+    if (vmap.size || gmap.size) { const k = s.toLowerCase(); if (vmap.has(k)) s = vmap.get(k); else if (gmap.has(k)) { s = gmap.get(k); g = true; } }
     if (repFrom) s = replaceText(s, repFrom, repTo, repAt);
     if (s === '') {
-      if (ifEmpty !== '') { const r = convertTo(f, ifEmpty, set); return { v: r.v, e: r.e, w: r.w, input, d: false }; }
+      if (ifEmpty !== '') { const r = convertTo(f, ifEmpty, set); return { v: r.v, e: r.e, w: r.w, input, d: false, g }; }
       return { v: dflt, d: dflt !== '', input, empty: true };
     }
     if (kase === 'upper') s = s.toUpperCase(); else if (kase === 'lower') s = s.toLowerCase(); else if (kase === 'title') s = titleCase(s);
     if (padLen > 0 && s.length < padLen && (!padNum || /^\d+$/.test(s))) s = padChar.repeat(padLen - s.length) + s;
     if (prefix) s = prefix + s; if (suffix) s = s + suffix;
     const r = convertTo(f, s, set);
-    return { v: r.v, e: r.e, w: r.w, input, d: false };
+    return { v: r.v, e: r.e, w: r.w, input, d: false, g };
   };
 }
 
 /* contrôle d'un champ sur toutes les lignes */
 function checkField(t, f) {
   const ctx = tableCtx(t); const F = getF(t, f);
-  const out = { err: 0, warn: 0, ex: [], sampleIn: undefined, sampleOut: '', sampleDef: false, sampleBad: false, missing: null };
+  const out = { err: 0, warn: 0, glob: 0, ex: [], sampleIn: undefined, sampleOut: '', sampleDef: false, sampleBad: false, missing: null };
   if (!ctx || !ctx.rows.length) { out.sampleOut = S.map.settings.fillDefaults ? f.dflt : ''; out.sampleDef = true; return out; }
   if (F?.kind === 'col' && F.col && !ctx.byName.has(F.col)) {
     out.missing = `colonne « ${F.col} » introuvable dans la feuille source`;
@@ -162,7 +172,7 @@ function checkField(t, f) {
   const fn = compileField(t, f, F, ctx); const mapped = isMapped(F);
   let got = false;
   for (let i = 0; i < ctx.rows.length; i++) {
-    const r = fn(ctx.rows[i]);
+    const r = fn(ctx.rows[i]); if (r.g) out.glob++;
     if (r.e) { out.err++; if (out.ex.length < 8) out.ex.push({ row: ctx.rowNums[i], msg: r.e, lvl: 'err' }); }
     else if (r.w) { out.warn++; if (out.ex.length < 8) out.ex.push({ row: ctx.rowNums[i], msg: r.w, lvl: 'warn' }); }
     if (!got && (r.input || i === ctx.rows.length - 1 || !mapped)) { got = true; out.sampleIn = r.input ?? ''; out.sampleOut = r.v; out.sampleDef = !!r.d; out.sampleBad = !!r.e; }
@@ -180,7 +190,7 @@ function checkKeys(t) {
   const T = tm(t); const ctx = tableCtx(t); const kf = keyFields(t);
   if (!ctx || !kf.length) return null;
   const fns = kf.map(f => compileField(t, f, getF(t, f), ctx));
-  const SEP = ''; const show = v => v.split(SEP).map(x => x === '' ? '(vide)' : x).join(' | ');
+  const SEP = '\u0001'; const show = v => v.split(SEP).map(x => x === '' ? '(vide)' : x).join(' | ');
   const seen = new Map(); let empty = 0, dup = 0; const ex = [];
   if (T.mode === 'append') for (const r of t.existing) seen.set(kf.map(f => r[f.i]).join(SEP), 'package');
   for (let i = 0; i < ctx.rows.length; i++) {

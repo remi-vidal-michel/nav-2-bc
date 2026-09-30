@@ -9,8 +9,8 @@ function curT() { return S.pkg.tables[S.ui.t]; }
 function typeLabel(ty) { return ty.base + (ty.len ? `[${ty.len}]` : ''); }
 function renderAll() { renderTables(); renderCenter(); renderInspector(); renderChips(); }
 function renderChips() {
-  $('#chipRaw span').textContent = S.raw?.fileName || '—';
-  $('#chipPkg span').textContent = S.pkg?.fileName || '—';
+  $('#chipRaw span').textContent = S.raw?.fileName || '-';
+  $('#chipPkg span').textContent = S.pkg?.fileName || '-';
 }
 function renderTables() {
   const el = $('#tables');
@@ -81,7 +81,8 @@ function fieldRowHTML(t, f) {
   if (F?.kind === 'col' && F.col) { srcTxt = F.col; cls = V.missing ? 'missing' : ''; }
   else if (F?.kind === 'const') { srcTxt = `Constante : ${F.value === '' ? '(vide)' : F.value}`; cls = ''; }
   else if (F?.kind === 'tpl' && F.tpl) { srcTxt = `Modèle : ${F.tpl}`; cls = ''; }
-  const chips = fmtChips(F, f).map(([c, l]) => `<span class="chip ${c}">${esc(l)}</span>`).join('');
+  const chips = fmtChips(F, f).map(([c, l]) => `<span class="chip ${c}">${esc(l)}</span>`).join('')
+    + (V.glob ? `<span class="chip" title="${plural(V.glob, 'ligne transformée', 'lignes transformées')} par une correspondance globale">globale</span>` : '');
   const outCls = V.sampleBad ? 'bad' : V.sampleDef ? 'def' : '';
   const prev = m && V.sampleIn !== undefined
     ? `<span class="in" title="${esc(V.sampleIn)}">${esc(V.sampleIn || '-')}</span><span class="arrow">→</span><span class="out ${outCls}" title="${esc(V.sampleOut)}">${esc(V.sampleOut === '' ? '-' : V.sampleOut)}</span>`
@@ -216,11 +217,12 @@ function renderInspector() {
       ? dv.slice(0, 150).map(([v, n]) => [v, n, existing.get(v.toLowerCase()) ?? '']).concat((F.map || []).filter(([a]) => !cnt.has(a.trim().toLowerCase())).map(([a, b]) => [a, 0, b]))
       : (F.map || []).map(([a, b]) => [a, cnt.get(a.trim().toLowerCase()) || 0, b]);
     const nMapped = (F.map || []).filter(p => p[1] !== '').length;
+    const G = globalMapIndex(); const ph = v => { const g = G.get(v.trim().toLowerCase()); return g !== undefined ? `${esc(g)} (globale)` : 'inchangée'; };
     vmapHTML = secHTML('map', 'Correspondance des valeurs', true, {
       hint: nMapped ? plural(nMapped, 'valeur remplacée', 'valeurs remplacées') : '',
       body: `<datalist id="${listId}">${targets.map(v => `<option value="${esc(v)}">`).join('')}</datalist>
       ${rows.length ? `<table class="vmap">${rows.map(([v, n, b], i) => `<tr data-i="${i}"><td class="v" title="${esc(v)}">${esc(v === '' ? '(vide)' : v)}</td><td class="n">${n ? nf(n) : ''}</td><td class="a">→</td>
-        <td><input type="text" list="${listId}" data-from="${esc(v)}"${all && !bool ? '' : ' data-keep'} value="${esc(b)}" placeholder="inchangée"></td><td class="r">${vmapDot(f, F, v, b)}</td>${all ? '' : `<td class="x"><button class="btn small ghost" data-vdel="${esc(v)}" title="Retirer" aria-label="Retirer">×</button></td>`}</tr>`).join('')}</table>` : ''}
+        <td><input type="text" list="${listId}" data-from="${esc(v)}"${all && !bool ? '' : ' data-keep'} value="${esc(b)}" placeholder="${ph(v)}"></td><td class="r">${vmapDot(f, F, v, b)}</td>${all ? '' : `<td class="x"><button class="btn small ghost" data-vdel="${esc(v)}" title="Retirer" aria-label="Retirer">×</button></td>`}</tr>`).join('')}</table>` : ''}
       ${all ? '' : `<button class="btn small" id="btnVmapAdd" style="margin-top:${rows.length ? 8 : 0}px">+ Ajouter une valeur</button>`}`,
     });
   }
@@ -268,6 +270,7 @@ function renderInspector() {
   refreshInspectorLive();
 }
 function vmapDot(f, F, from, to) {
+  if ((to === '' || to == null) && F?.kind === 'col') to = globalMapIndex().get(from.trim().toLowerCase()) ?? to;
   if (to === '' || to == null) {
     if (f.type.base === 'Option') { const ix = optionIndex(f.type); const ok = from === '' || ix.byNorm.has(norm(from)) || ix.byNum.has(from); return `<span class="dot ${ok ? 'ok' : 'err'}" title="${ok ? 'Reconnue' : 'Option inconnue : saisissez une correspondance'}"></span>`; }
     if (f.type.base === 'Boolean') { const k = norm(from); const ok = k === '' || TRUE_W.has(k) || FALSE_W.has(k); return `<span class="dot ${ok ? 'ok' : 'err'}"></span>`; }
@@ -660,6 +663,7 @@ function bindApp() {
   $('#chipRaw').onclick = () => $('#fileRaw').click();
   $('#chipPkg').onclick = () => $('#filePkg').click();
   $('#btnSettings').onclick = openSettings;
+  $('#btnGlobalMap').onclick = openGlobalMap;
   $('#btnGenerate').onclick = openGenerate;
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.map && !$('#app').classList.contains('hidden')) { e.preventDefault(); exportMapping(); }
@@ -670,6 +674,73 @@ function bindApp() {
 }
 
 /* ----- dialogues ----- */
+/* pour chaque valeur source (en minuscules), les champs alimentés par colonne où elle apparaît
+   sans correspondance propre au champ, c'est-à-dire là où une correspondance globale s'appliquerait */
+function globalUsage() {
+  const hits = new Map();
+  for (const t of S.pkg.tables) {
+    const ctx = tableCtx(t); if (!ctx) continue;
+    for (const f of t.fields) {
+      const F = getF(t, f); if (F?.kind !== 'col' || !ctx.byName.has(F.col)) continue;
+      const own = new Set((F.map || []).filter(p => p[1] !== '').map(p => p[0].trim().toLowerCase()));
+      for (const [v] of distinctValues(ctx, F.col, Infinity)) {
+        const k = v.toLowerCase(); if (!k || own.has(k)) continue;
+        if (!hits.has(k)) hits.set(k, []); hits.get(k).push(`${t.name} › ${f.caption}`);
+      }
+    }
+  }
+  return hits;
+}
+function openGlobalMap() {
+  let rows = (S.map.globalMap || []).map(p => [...p]); if (!rows.length) rows.push(['', '']);
+  const hits = globalUsage();
+  const use = v => { const h = hits.get(v.trim().toLowerCase()); return h ? `<span title="${esc(h.join('\n'))}">${plural(h.length, 'champ')}</span>` : v.trim() ? '<span class="none">aucun champ</span>' : ''; };
+  const body = $('#dlgGlobalBody'); const d = $('#dlgGlobal');
+  const draw = focusLast => {
+    body.innerHTML = `<h3>Correspondances globales</h3>
+    <div class="sub">La valeur source est remplacée dans tous les champs alimentés par une colonne ou une combinaison, quelle que soit la table. Une correspondance définie sur le champ reste prioritaire. Vous pouvez coller deux colonnes copiées depuis Excel.</div>
+    <div class="gmap-wrap"><table class="vmap gmap"><thead><tr><th>Valeur source</th><th></th><th>Valeur BC</th><th>Rencontrée dans</th><th></th></tr></thead><tbody>
+    ${rows.map(([a, b], i) => `<tr data-i="${i}"><td><input type="text" data-g="0" value="${esc(a)}" placeholder="ex. 33011"></td><td class="a">→</td><td><input type="text" data-g="1" value="${esc(b)}" placeholder="ex. 033010"></td><td class="u">${use(a)}</td><td class="x"><button class="btn small ghost" data-gdel="${i}" title="Retirer" aria-label="Retirer">×</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <button class="btn small" id="gAdd" style="margin-top:8px">+ Ajouter une valeur</button>
+    <div class="actions"><button class="btn" id="gCancel">Annuler</button><button class="btn primary" id="gOk">Appliquer</button></div>`;
+    if (focusLast) $$('input[data-g="0"]', body).at(-1)?.focus();
+  };
+  body.oninput = e => {
+    const g = e.target.dataset.g; if (g === undefined) return;
+    const tr = e.target.closest('tr'); rows[+tr.dataset.i][+g] = e.target.value;
+    if (g === '0') tr.querySelector('.u').innerHTML = use(e.target.value);
+  };
+  // collage de plusieurs lignes (deux colonnes séparées par une tabulation) : chaque valeur source est ajoutée ou mise à jour
+  body.onpaste = e => {
+    if (e.target.dataset.g === undefined) return;
+    const text = e.clipboardData.getData('text').replace(/\r?\n$/, ''); if (!/[\t\n]/.test(text)) return;
+    e.preventDefault();
+    rows = rows.filter(([a, b]) => a.trim() || b.trim());
+    for (const line of text.split(/\r?\n/)) {
+      const [a = '', b = ''] = line.split('\t'); if (!a.trim()) continue;
+      const i = rows.findIndex(r => r[0].trim().toLowerCase() === a.trim().toLowerCase());
+      if (i >= 0) rows[i][1] = b.trim(); else rows.push([a.trim(), b.trim()]);
+    }
+    if (!rows.length) rows.push(['', '']);
+    draw();
+  };
+  body.onclick = e => {
+    const del = e.target.closest('[data-gdel]');
+    if (del) { rows.splice(+del.dataset.gdel, 1); if (!rows.length) rows.push(['', '']); draw(); return; }
+    if (e.target.id === 'gAdd') { rows.push(['', '']); draw(true); return; }
+    if (e.target.id === 'gCancel') { d.close(); return; }
+    if (e.target.id === 'gOk') {
+      // lignes incomplètes ignorées ; une valeur source saisie deux fois garde la dernière correspondance
+      const seen = new Map();
+      for (const [a, b] of rows) if (a.trim() && b.trim()) seen.set(a.trim().toLowerCase(), [a.trim(), b.trim()]);
+      S.map.globalMap = [...seen.values()];
+      d.close(); validateAll(); renderAll(); autosave();
+      toast(seen.size ? `${plural(seen.size, 'correspondance globale', 'correspondances globales')} appliquée${seen.size > 1 ? 's' : ''}.` : 'Aucune correspondance globale.');
+    }
+  };
+  draw(); d.showModal();
+}
 function openSettings() {
   const s = S.map.settings;
   const opt = (id, on, title, sub) => `<label class="chk"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span>${title}<small>${sub}</small></span></label>`;
@@ -698,7 +769,7 @@ function openGenerate() {
     const n = mode === 'keep' ? t.existing.length : mode === 'append' ? t.existing.length + ctx.rows.length : ctx.rows.length;
     const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
     const modeTxt = mode === 'keep' ? 'Inchangée' : mode === 'append' ? 'Ajout' : 'Remplacement';
-    return `<tr><td>${esc(t.name)}</td><td>${esc(T.source || '—')}</td><td>${modeTxt}</td><td class="num">${mode === 'keep' ? '—' : mapped + ' / ' + t.fields.length}</td><td class="num">${nf(n)}</td>
+    return `<tr><td>${esc(t.name)}</td><td>${esc(T.source || '-')}</td><td>${modeTxt}</td><td class="num">${mode === 'keep' ? '-' : mapped + ' / ' + t.fields.length}</td><td class="num">${nf(n)}</td>
       <td>${mode === 'keep' ? '' : iss.err ? `<span class="pill err">${plural(iss.err, 'champ')} en erreur</span>` : iss.warn ? `<span class="pill warn">${plural(iss.warn, 'champ')} en alerte</span>` : '<span class="pill ok">OK</span>'}</td></tr>`;
   }).join('');
   const anyErr = S.pkg.tables.some(t => tableIssues(t).err);

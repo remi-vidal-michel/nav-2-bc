@@ -14,6 +14,7 @@ function exportMapping() {
 function validateMapping(obj) {
   if (!obj || typeof obj !== 'object' || !obj.tables) throw new Error("Ce fichier ne contient pas de modèle de mapping.");
   const m = newMap(); m.settings = { ...defaultSettings(), ...(obj.settings || {}) };
+  if (Array.isArray(obj.globalMap)) m.globalMap = obj.globalMap.filter(p => Array.isArray(p) && p.length === 2).map(p => [String(p[0]), String(p[1])]);
   for (const [tn, T] of Object.entries(obj.tables)) {
     const fields = {};
     for (const [k, F] of Object.entries(T.fields || {})) {
