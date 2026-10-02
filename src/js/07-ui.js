@@ -4,7 +4,7 @@
 /* ---------------- rendu ---------------- */
 const ICON_CHEV = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6l4 4 4-4"/></svg>';
 const ICON_SEARCH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>';
-const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+const ICON_KEY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg>';
 const ICON_FUNNEL = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 3h12l-4.5 5.5V13l-3 1.5v-6L2 3z"/></svg>';
 function curT() { return S.pkg.tables[S.ui.t]; }
 function typeLabel(ty) { return ty.base + (ty.len ? `[${ty.len}]` : ''); }
@@ -15,11 +15,14 @@ function renderChips() {
 }
 function renderTables() {
   const el = $('#tables');
-  el.innerHTML = '<h3>Tables du package BC</h3>' + S.pkg.tables.map((t, i) => {
+  el.innerHTML = '<h3 class="phead">Tables du package BC</h3>' + S.pkg.tables.map((t, i) => {
     const T = tm(t); const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
+    // badge : lignes source retenues par les filtres ; sa couleur donne l'état des contrôles
     const iss = tableIssues(t); const mode = effectiveMode(t);
-    const modeTxt = mode === 'keep' ? 'Inchangée' : mode === 'append' ? 'Ajout' : 'Remplacement';
-    const badge = mode === 'keep' ? `<span class="pill mute">${modeTxt}</span>` : iss.err ? `<span class="pill err">${iss.err}</span>` : iss.warn ? `<span class="pill warn">${iss.warn}</span>` : `<span class="pill ok">${modeTxt}</span>`;
+    const n = mode === 'keep' ? 0 : tableCtx(t).rows.length;
+    const state = iss.err ? ['err', `${plural(iss.err, 'champ')} en erreur`] : iss.warn ? ['warn', `${plural(iss.warn, 'champ')} en alerte`] : ['ok', 'aucune anomalie'];
+    const badge = mode === 'keep' ? '<span class="pill mute">Inchangée</span>'
+      : `<span class="pill ${state[0]}" title="${plural(n, 'ligne source retenue', 'lignes source retenues')} (${mode === 'append' ? 'ajout' : 'remplacement'}) : ${state[1]}">${nf(n)}</span>`;
     return `<button class="titem${i === S.ui.t ? ' sel' : ''}" data-t="${i}">
       <div class="tn"><span>${esc(t.name)}</span>${badge}</div>
       <div class="ts">${T.source ? 'Source : ' + esc(T.source) : 'Aucune feuille source'}</div>
@@ -32,17 +35,15 @@ function renderCenter() {
   const sheets = S.raw.sheets.map(s => `<option value="${esc(s.name)}"${s.name === T.source ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
   $('#center').innerHTML = `
   <div class="thead">
-    <h2>${esc(t.name)} <span class="facts" id="facts">${factsHTML(t)}</span></h2>
-    <div class="controls">
-      <label class="ctl"><span>Feuille source Navision</span><select id="selSource"><option value="">Aucune</option>${sheets}</select></label>
-      <label class="ctl"><span>Ligne d'en-tête</span><input type="number" id="inHdr" min="1" max="50" value="${T.headerRow}" ${T.source ? '' : 'disabled'}></label>
-      <label class="ctl"><span>Données du package</span><select id="selMode" ${T.source ? '' : 'disabled'}>
+    <div class="trow">
+      <h2>${esc(t.name)}</h2>
+      <select id="selSource" aria-label="Feuille source Navision" title="Feuille source Navision"><option value="">Aucune feuille source</option>${sheets}</select>
+      <select id="selMode" aria-label="Données du package" title="Sort des lignes déjà présentes dans le package" ${T.source ? '' : 'disabled'}>
         <option value="replace"${T.mode === 'replace' ? ' selected' : ''}>Remplacer par la source</option>
         <option value="append"${T.mode === 'append' ? ' selected' : ''}>Ajouter à l'existant</option>
-        <option value="keep"${T.mode === 'keep' ? ' selected' : ''}>Laisser inchangées</option></select></label>
-      <button class="btn" id="btnAuto" ${ctx ? '' : 'disabled'} title="Associe les colonnes dont le nom correspond">Mapper automatiquement</button>
-      <button class="btn ghost icon danger" id="btnClear" title="Retirer toutes les correspondances de cette table" aria-label="Tout effacer">${ICON_TRASH}</button>
+        <option value="keep"${T.mode === 'keep' ? ' selected' : ''}>Laisser inchangées</option></select>
     </div>
+    <div class="facts" id="facts">${factsHTML(t)}</div>
   </div>
   <div class="toolbar">
     <label class="search">${ICON_SEARCH}<input type="search" id="inSearch" placeholder="Rechercher" aria-label="${S.ui.tab === 'map' ? 'Rechercher un champ ou une colonne' : 'Rechercher un champ, une colonne ou une valeur'}" value="${esc(S.ui.q)}"></label>
@@ -58,16 +59,10 @@ function renderCenter() {
   <div class="gridwrap" id="gridwrap"></div>`;
   renderGrid();
 }
+/* sous le titre de la table : seulement les doublons ou valeurs vides de la clé primaire */
 function factsHTML(t) {
-  const T = tm(t); const ctx = tableCtx(t); const mode = effectiveMode(t);
-  const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
   const K = S.val[t.name]?.keys;
-  const keyNote = K && mode !== 'keep' && (K.dup || K.empty) ? `<span style="color:var(--err)"><b style="color:inherit">Clé ${esc(keyLabel(t))}</b> : ${[K.dup && plural(K.dup, 'doublon'), K.empty && plural(K.empty, 'valeur vide', 'valeurs vides')].filter(Boolean).join(', ')}</span>` : '';
-  return `<span><b>${ctx ? nf(ctx.rows.length) : 0}</b> lignes source${ctx?.total !== undefined ? ` filtrées / ${nf(ctx.total)}` : ''}</span>
-      <span><b>${nf(t.existing.length)}</b> lignes déjà dans le package</span>
-      <span><b>${mapped}</b> / ${t.fields.length} champs alimentés</span>
-      ${mode === 'keep' && T.source ? '<span>Cette table sera recopiée telle quelle.</span>' : ''}
-      ${keyNote}`;
+  return K && effectiveMode(t) !== 'keep' && (K.dup || K.empty) ? `<span style="color:var(--err)"><b style="color:inherit">Clé ${esc(keyLabel(t))}</b> : ${[K.dup && plural(K.dup, 'doublon'), K.empty && plural(K.empty, 'valeur vide', 'valeurs vides')].filter(Boolean).join(', ')}</span>` : '';
 }
 /* résumé d'un filtre : les valeurs conservées, ou « sauf … » quand on en a écarté moins */
 function filterSummary(t, F) {
@@ -82,8 +77,7 @@ function fieldRowHTML(t, f) {
   if (F?.kind === 'col' && F.col) { srcTxt = F.col; cls = V.missing ? 'missing' : ''; }
   else if (F?.kind === 'const') { srcTxt = `Constante : ${F.value === '' ? '(vide)' : F.value}`; cls = ''; }
   else if (F?.kind === 'tpl' && F.tpl) { srcTxt = `Modèle : ${F.tpl}`; cls = ''; }
-  const chips = fmtChips(F, f).map(([c, l]) => `<span class="chip ${c}">${esc(l)}</span>`).join('')
-    + (V.glob ? `<span class="chip" title="${plural(V.glob, 'ligne transformée', 'lignes transformées')} par une correspondance globale">globale</span>` : '');
+  const chips = fmtChips(F, f).map(([c, l]) => `<span class="chip ${c}">${esc(l)}</span>`).join('');
   const outCls = V.sampleBad ? 'bad' : V.sampleDef ? 'def' : '';
   const prev = m && V.sampleIn !== undefined
     ? `<span class="in" title="${esc(V.sampleIn)}">${esc(V.sampleIn || '-')}</span><span class="arrow">→</span><span class="out ${outCls}" title="${esc(V.sampleOut)}">${esc(V.sampleOut === '' ? '-' : V.sampleOut)}</span>`
@@ -94,7 +88,7 @@ function fieldRowHTML(t, f) {
     : `<button class="srcbtn fltbtn" data-flt="${esc(f.key)}" title="Filtrer les lignes sur les valeurs de ce champ">${ICON_FUNNEL}<span></span>${ICON_CHEV}</button>`;
   const st = [V.err ? `<span class="pill err" title="Lignes en erreur">${nf(V.err)}</span>` : '', V.warn ? `<span class="pill warn" title="Lignes avec alerte">${nf(V.warn)}</span>` : ''].join('');
   return `<div class="grow frow${m ? ' mapped' : ''}${sel ? ' sel' : ''}" data-k="${esc(f.key)}" tabindex="${sel ? 0 : -1}">
-    <div><span class="fcap" title="${esc(f.caption)}">${esc(f.caption)}</span><span class="ftype"><code>${f.L}</code> ${esc(typeLabel(f.type))}${isKeyField(t, f) ? '<span class="key">clé</span>' : ''}</span></div>
+    <div><span class="fcap" title="${esc(f.caption)}">${esc(f.caption)}</span><span class="ftype"><code>${f.L}</code> ${esc(typeLabel(f.type))}${isKeyField(t, f) ? `<span class="key" title="Clé primaire">${ICON_KEY}</span>` : ''}</span></div>
     <div><button class="srcbtn ${cls}" data-pick="${esc(f.key)}" title="${esc(srcTxt)}"><span>${esc(srcTxt)}</span>${ICON_CHEV}</button></div>
     <div class="chips">${chips}</div>
     <div class="flt">${flt}</div>
@@ -218,12 +212,12 @@ function renderInspector() {
       ? dv.slice(0, 150).map(([v, n]) => [v, n, existing.get(v.toLowerCase()) ?? '']).concat((F.map || []).filter(([a]) => !cnt.has(a.trim().toLowerCase())).map(([a, b]) => [a, 0, b]))
       : (F.map || []).map(([a, b]) => [a, cnt.get(a.trim().toLowerCase()) || 0, b]);
     const nMapped = (F.map || []).filter(p => p[1] !== '').length;
-    const G = globalMapIndex(); const ph = v => { const g = G.get(v.trim().toLowerCase()); return g !== undefined ? `${esc(g)} (globale)` : 'inchangée'; };
     vmapHTML = secHTML('map', 'Correspondance des valeurs', true, {
-      hint: nMapped ? plural(nMapped, 'valeur remplacée', 'valeurs remplacées') : '',
+      closedHint: nMapped ? plural(nMapped, 'valeur remplacée', 'valeurs remplacées') : '',
+      extra: `<button class="btn small ghost" id="btnCopyMap" ${nMapped ? '' : 'disabled'}>Copier</button><button class="btn small ghost" id="btnPasteMap" ${S.clipMap ? '' : 'disabled'} title="Colle les correspondances des valeurs présentes dans cette colonne">Coller</button>`,
       body: `<datalist id="${listId}">${targets.map(v => `<option value="${esc(v)}">`).join('')}</datalist>
       ${rows.length ? `<table class="vmap">${rows.map(([v, n, b], i) => `<tr data-i="${i}"><td class="v" title="${esc(v)}">${esc(v === '' ? '(vide)' : v)}</td><td class="n">${n ? nf(n) : ''}</td><td class="a">→</td>
-        <td><input type="text" list="${listId}" data-from="${esc(v)}"${all && !bool ? '' : ' data-keep'} value="${esc(b)}" placeholder="${ph(v)}"></td><td class="r">${vmapDot(f, F, v, b)}</td>${all ? '' : `<td class="x"><button class="btn small ghost" data-vdel="${esc(v)}" title="Retirer" aria-label="Retirer">×</button></td>`}</tr>`).join('')}</table>` : ''}
+        <td><input type="text" list="${listId}" data-from="${esc(v)}"${all && !bool ? '' : ' data-keep'} value="${esc(b)}" placeholder="inchangée"></td><td class="r">${vmapDot(f, F, v, b)}</td>${all ? '' : `<td class="x"><button class="btn small ghost" data-vdel="${esc(v)}" title="Retirer" aria-label="Retirer">×</button></td>`}</tr>`).join('')}</table>` : ''}
       ${all ? '' : `<button class="btn small" id="btnVmapAdd" style="margin-top:${rows.length ? 8 : 0}px">+ Ajouter une valeur</button>`}`,
     });
   }
@@ -255,10 +249,8 @@ function renderInspector() {
     </div>`,
   });
   el.innerHTML = `<div class="insp-inner" data-k="${esc(f.key)}">
-    <h3>${esc(f.caption)} <span class="ftype">${esc(typeLabel(ty))}${isKeyField(t, f) ? '<span class="key">clé</span>' : ''}</span></h3>
-    ${f.dflt !== '' ? `<div class="sub">Défaut BC <code>${esc(f.dflt)}</code></div>` : ''}
+    <div class="phead insp-head"><h3>${esc(f.caption)} <span class="ftype">${esc(typeLabel(ty))}</span></h3>${keyToggleHTML(isKeyField(t, f))}</div>
     ${optHTML}
-    <label class="chk keychk"><input type="checkbox" id="inKey" ${isKeyField(t, f) ? 'checked' : ''}> Fait partie de la clé primaire</label>
     <div class="sec"><h4>Source</h4>
       <div class="seg" id="segKind" style="margin-bottom:10px">${[['col', 'Colonne'], ['const', 'Constante'], ['tpl', 'Combinaison'], ['none', 'Aucune']].map(([k, l]) => `<button data-kind="${k}" aria-pressed="${kind === k}">${l}</button>`).join('')}</div>
       ${srcBlock}
@@ -271,7 +263,6 @@ function renderInspector() {
   refreshInspectorLive();
 }
 function vmapDot(f, F, from, to) {
-  if ((to === '' || to == null) && F?.kind === 'col') to = globalMapIndex().get(from.trim().toLowerCase()) ?? to;
   if (to === '' || to == null) {
     if (f.type.base === 'Option') { const ix = optionIndex(f.type); const ok = from === '' || ix.byNorm.has(norm(from)) || ix.byNum.has(from); return `<span class="dot ${ok ? 'ok' : 'err'}" title="${ok ? 'Reconnue' : 'Option inconnue : saisissez une correspondance'}"></span>`; }
     if (f.type.base === 'Boolean') { const k = norm(from); const ok = k === '' || TRUE_W.has(k) || FALSE_W.has(k); return `<span class="dot ${ok ? 'ok' : 'err'}"></span>`; }
@@ -293,12 +284,11 @@ function refreshInspectorLive() {
 function inspectorHelp(t) {
   const T = tm(t); const V = S.val[t.name]; const K = V?.keys;
   const iss = t.fields.map(f => [f, V?.fields[f.key]]).filter(([, v]) => v && (v.err || v.warn));
+  // sans champ sélectionné : seulement ce qui demande une action
   return `<div class="insp-inner">
-    <h3>${esc(t.name)}</h3>
-    <div class="sub">Sélectionnez un champ pour régler sa source et sa mise en forme.</div>
-    ${!T.source ? `<div class="sec"><div class="note">Associez une feuille de l'export Navision à cette table avec le sélecteur « Feuille source ».</div></div>` : ''}
-    <div class="sec"><h4>Clé primaire</h4><div class="note">${esc(keyLabel(t))}. Cochez « Fait partie de la clé primaire » dans le détail d'un champ pour la modifier.</div>
-      ${K && (K.dup || K.empty) && effectiveMode(t) !== 'keep' ? `<ul class="issues">${K.ex.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}</div>
+    <div class="phead insp-head"><h3>${esc(t.name)}</h3></div>
+    ${!T.source ? `<div class="sec"><div class="note">Associez une feuille de l'export Navision à cette table avec la liste à droite du nom de la table.</div></div>` : ''}
+    ${K && (K.dup || K.empty) && effectiveMode(t) !== 'keep' ? `<div class="sec"><h4>Clé primaire (${esc(keyLabel(t))})</h4><ul class="issues">${K.ex.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}
     ${iss.length ? `<div class="sec"><h4>Champs à revoir</h4><ul class="issues">${iss.map(([f, v]) => `<li><a href="#" data-goto="${esc(f.key)}">${esc(f.caption)}</a> : ${[v.err && plural(v.err, 'erreur'), v.warn && plural(v.warn, 'alerte')].filter(Boolean).join(', ')}</li>`).join('')}</ul></div>` : ''}
   </div>`;
 }
@@ -478,10 +468,12 @@ function afterFieldChange(t, f, full) {
 }
 function refreshFacts(t) { const el = $('#facts'); if (el) el.innerHTML = factsHTML(t); }
 /* ajoute ou retire un champ de la clé primaire, puis recontrôle l'unicité */
-function setKeyField(t, f, box) {
+/* interrupteur « Clé » de l'en-tête du panneau de détail */
+const keyToggleHTML = on => { const l = on ? 'Retirer ce champ de la clé primaire' : 'Ajouter ce champ à la clé primaire'; return `<button class="keytog" id="btnKey" aria-pressed="${on}" title="${l}" aria-label="${l}">${ICON_KEY}</button>`; };
+function setKeyField(t, f, on) {
   const cur = keyFields(t);
-  const next = box.checked ? t.fields.filter(x => cur.includes(x) || x === f) : cur.filter(x => x !== f);
-  if (!next.length) { box.checked = true; toast('La clé primaire doit contenir au moins un champ.'); return; }
+  const next = on ? t.fields.filter(x => cur.includes(x) || x === f) : cur.filter(x => x !== f);
+  if (!next.length) { toast('La clé primaire doit contenir au moins un champ.'); return; }
   const T = tm(t); const before = cur;
   T.keys = next.map(x => x.key);
   (S.val[t.name] ||= { fields: {}, keys: null }).keys = checkKeys(t);
@@ -561,15 +553,14 @@ function bindApp() {
     if (e.target.id === 'selSource') {
       T.source = e.target.value || null;
       if (T.source) {
-        T.headerRow = guessHeaderRow(S.raw.sheets.find(s => s.name === T.source));
+        T.headerRow = 1;
         T.mode = dataRowCount(T.source, T.headerRow) > 0 ? (T.mode === 'keep' ? 'replace' : T.mode) : 'keep';
         const has = t.fields.some(f => isMapped(getF(t, f)));
         ctxCache.clear();
         if (!has) { const n = autoMapTable(t); if (n) toast(`${plural(n, 'champ associé', 'champs associés')} automatiquement.`); }
       } else T.mode = 'keep';
       changeTableSource(t);
-    } else if (e.target.id === 'inHdr') { T.headerRow = Math.max(1, +e.target.value || 1); changeTableSource(t); }
-    else if (e.target.id === 'selFilter') { S.ui.filter = e.target.value; renderGrid(); }
+    } else if (e.target.id === 'selFilter') { S.ui.filter = e.target.value; renderGrid(); }
     else if (e.target.id === 'selMode') {
       T.mode = e.target.value; validateTable(t); renderTables(); renderCenter(); autosave();
       if (T.mode === 'replace' && t.existing.length) toast(`Les ${nf(t.existing.length)} lignes actuelles de « ${t.name} » seront remplacées.`);
@@ -581,16 +572,6 @@ function bindApp() {
     const th = e.target.closest('.ptable th[data-k]'); if (th) { selectField(th.dataset.k, false); return; }
     const tr = e.target.closest('.ptable tbody tr'); // sélection de ligne, purement visuelle
     if (tr) { S.ui.row = +tr.dataset.r; $$('.ptable tr.rsel').forEach(x => x.classList.remove('rsel')); tr.classList.add('rsel'); return; }
-    if (e.target.closest('#btnAuto')) {
-      const n = autoMapTable(t); validateTable(t); renderAll(); autosave();
-      toast(n ? `${plural(n, 'nouveau champ associé', 'nouveaux champs associés')}. Les associations « à vérifier » sont signalées.` : 'Aucune nouvelle correspondance trouvée par le nom.');
-      return;
-    }
-    if (e.target.closest('#btnClear')) {
-      const backup = JSON.stringify(T.fields); T.fields = {}; validateTable(t); renderAll(); autosave();
-      toast('Correspondances de la table effacées.', { action: { label: 'Annuler', run: () => { T.fields = JSON.parse(backup); validateTable(t); renderAll(); autosave(); } } });
-      return;
-    }
     const pick = e.target.closest('[data-pick]'); if (pick) { selectField(pick.dataset.pick, false); openPicker(pick, pick.dataset.pick); e.stopPropagation(); return; }
     const fb = e.target.closest('[data-flt]');
     if (fb) { selectField(fb.dataset.flt, false); openFilter(fb, fb.dataset.flt); e.stopPropagation(); return; }
@@ -622,11 +603,23 @@ function bindApp() {
       return;
     }
     const pick = e.target.closest('[data-pick]'); if (pick) { openPicker(pick, pick.dataset.pick); e.stopPropagation(); return; }
+    if (e.target.closest('#btnKey')) { setKeyField(t, f, !isKeyField(t, f)); return; }
     if (e.target.id === 'btnConfirm') { setField(t, f, { auto: null }, true); return; }
     if (e.target.id === 'btnVmapAdd') { openVmapAdd(e.target); e.stopPropagation(); return; }
     const vdel = e.target.closest('[data-vdel]');
     if (vdel) { const k = vdel.dataset.vdel.trim().toLowerCase(); const F = getF(t, f); setField(t, f, { map: (F.map || []).filter(([a]) => a.trim().toLowerCase() !== k) }, true); return; }
     if (e.target.id === 'btnPadHint') { setField(t, f, { padLen: f.padHint, padNum: true }, true); return; }
+    if (e.target.id === 'btnCopyMap') {
+      S.clipMap = (getF(t, f).map || []).filter(p => p[1] !== '').map(p => [...p]); renderInspector();
+      toast(`${plural(S.clipMap.length, 'correspondance copiée', 'correspondances copiées')}. Sélectionnez un autre champ puis « Coller ».`); return;
+    }
+    // collage partiel : seules les valeurs présentes dans la colonne du champ sont reprises, en remplaçant celles déjà saisies
+    if (e.target.id === 'btnPasteMap' && S.clipMap) {
+      const F = getF(t, f); const r = mergeValueMap(t, F, S.clipMap, true);
+      if (r.n) setField(t, f, { map: r.map }, true);
+      const skip = r.miss ? `, ${plural(r.miss, 'valeur absente', 'valeurs absentes')} de la colonne « ${F.col} » ignorée${r.miss > 1 ? 's' : ''}` : '';
+      toast(r.n ? `${plural(r.n, 'correspondance collée', 'correspondances collées')}${skip}.` : `Aucune des valeurs copiées n'est présente dans la colonne « ${F.col} ».`); return;
+    }
     if (e.target.id === 'btnCopyFmt') { const F = getF(t, f) || newF(); S.clip = { case: F.case, repFrom: F.repFrom, repTo: F.repTo, repAt: F.repAt, padLen: F.padLen, padChar: F.padChar, padNum: F.padNum, prefix: F.prefix, suffix: F.suffix, dflt: F.dflt }; renderInspector(); toast('Format copié. Sélectionnez un autre champ puis « Coller ».'); return; }
     if (e.target.id === 'btnPasteFmt' && S.clip) { setField(t, f, { ...S.clip }, true); toast('Format appliqué.'); return; }
   });
@@ -647,7 +640,6 @@ function bindApp() {
   });
   insp.addEventListener('change', e => {
     const [t, f] = cur(); if (!f) return; const id = e.target.id;
-    if (id === 'inKey') return setKeyField(t, f, e.target);
     if (id === 'inCase') setField(t, f, { case: e.target.value }, false);
     else if (id === 'inRepAt') setField(t, f, { repAt: e.target.value }, false);
     else if (id === 'inPadNum') setField(t, f, { padNum: e.target.checked }, false);
@@ -664,7 +656,6 @@ function bindApp() {
   $('#chipRaw').onclick = () => $('#fileRaw').click();
   $('#chipPkg').onclick = () => $('#filePkg').click();
   $('#btnSettings').onclick = openSettings;
-  $('#btnGlobalMap').onclick = openGlobalMap;
   $('#btnGenerate').onclick = openGenerate;
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.map && !$('#app').classList.contains('hidden')) { e.preventDefault(); exportMapping(); }
@@ -675,73 +666,6 @@ function bindApp() {
 }
 
 /* ----- dialogues ----- */
-/* pour chaque valeur source (en minuscules), les champs alimentés par colonne où elle apparaît
-   sans correspondance propre au champ, c'est-à-dire là où une correspondance globale s'appliquerait */
-function globalUsage() {
-  const hits = new Map();
-  for (const t of S.pkg.tables) {
-    const ctx = tableCtx(t); if (!ctx) continue;
-    for (const f of t.fields) {
-      const F = getF(t, f); if (F?.kind !== 'col' || !ctx.byName.has(F.col)) continue;
-      const own = new Set((F.map || []).filter(p => p[1] !== '').map(p => p[0].trim().toLowerCase()));
-      for (const [v] of distinctValues(ctx, F.col, Infinity)) {
-        const k = v.toLowerCase(); if (!k || own.has(k)) continue;
-        if (!hits.has(k)) hits.set(k, []); hits.get(k).push(`${t.name} › ${f.caption}`);
-      }
-    }
-  }
-  return hits;
-}
-function openGlobalMap() {
-  let rows = (S.map.globalMap || []).map(p => [...p]); if (!rows.length) rows.push(['', '']);
-  const hits = globalUsage();
-  const use = v => { const h = hits.get(v.trim().toLowerCase()); return h ? `<span title="${esc(h.join('\n'))}">${plural(h.length, 'champ')}</span>` : v.trim() ? '<span class="none">aucun champ</span>' : ''; };
-  const body = $('#dlgGlobalBody'); const d = $('#dlgGlobal');
-  const draw = focusLast => {
-    body.innerHTML = `<h3>Correspondances globales</h3>
-    <div class="sub">La valeur source est remplacée dans tous les champs alimentés par une colonne ou une combinaison, quelle que soit la table. Une correspondance définie sur le champ reste prioritaire. Vous pouvez coller deux colonnes copiées depuis Excel.</div>
-    <div class="gmap-wrap"><table class="vmap gmap"><thead><tr><th>Valeur source</th><th></th><th>Valeur BC</th><th>Rencontrée dans</th><th></th></tr></thead><tbody>
-    ${rows.map(([a, b], i) => `<tr data-i="${i}"><td><input type="text" data-g="0" value="${esc(a)}" placeholder="ex. 33011"></td><td class="a">→</td><td><input type="text" data-g="1" value="${esc(b)}" placeholder="ex. 033010"></td><td class="u">${use(a)}</td><td class="x"><button class="btn small ghost" data-gdel="${i}" title="Retirer" aria-label="Retirer">×</button></td></tr>`).join('')}
-    </tbody></table></div>
-    <button class="btn small" id="gAdd" style="margin-top:8px">+ Ajouter une valeur</button>
-    <div class="actions"><button class="btn" id="gCancel">Annuler</button><button class="btn primary" id="gOk">Appliquer</button></div>`;
-    if (focusLast) $$('input[data-g="0"]', body).at(-1)?.focus();
-  };
-  body.oninput = e => {
-    const g = e.target.dataset.g; if (g === undefined) return;
-    const tr = e.target.closest('tr'); rows[+tr.dataset.i][+g] = e.target.value;
-    if (g === '0') tr.querySelector('.u').innerHTML = use(e.target.value);
-  };
-  // collage de plusieurs lignes (deux colonnes séparées par une tabulation) : chaque valeur source est ajoutée ou mise à jour
-  body.onpaste = e => {
-    if (e.target.dataset.g === undefined) return;
-    const text = e.clipboardData.getData('text').replace(/\r?\n$/, ''); if (!/[\t\n]/.test(text)) return;
-    e.preventDefault();
-    rows = rows.filter(([a, b]) => a.trim() || b.trim());
-    for (const line of text.split(/\r?\n/)) {
-      const [a = '', b = ''] = line.split('\t'); if (!a.trim()) continue;
-      const i = rows.findIndex(r => r[0].trim().toLowerCase() === a.trim().toLowerCase());
-      if (i >= 0) rows[i][1] = b.trim(); else rows.push([a.trim(), b.trim()]);
-    }
-    if (!rows.length) rows.push(['', '']);
-    draw();
-  };
-  body.onclick = e => {
-    const del = e.target.closest('[data-gdel]');
-    if (del) { rows.splice(+del.dataset.gdel, 1); if (!rows.length) rows.push(['', '']); draw(); return; }
-    if (e.target.id === 'gAdd') { rows.push(['', '']); draw(true); return; }
-    if (e.target.id === 'gCancel') { d.close(); return; }
-    if (e.target.id === 'gOk') {
-      // lignes incomplètes ignorées ; une valeur source saisie deux fois garde la dernière correspondance
-      const seen = new Map();
-      for (const [a, b] of rows) if (a.trim() && b.trim()) seen.set(a.trim().toLowerCase(), [a.trim(), b.trim()]);
-      S.map.globalMap = [...seen.values()];
-      d.close(); validateAll(); renderAll(); autosave();
-      toast(seen.size ? `${plural(seen.size, 'correspondance globale', 'correspondances globales')} appliquée${seen.size > 1 ? 's' : ''}.` : 'Aucune correspondance globale.');
-    }
-  };
-  draw(); d.showModal();
-}
 function openSettings() {
   const s = S.map.settings;
   const opt = (id, on, title, sub) => `<label class="chk"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span>${title}<small>${sub}</small></span></label>`;

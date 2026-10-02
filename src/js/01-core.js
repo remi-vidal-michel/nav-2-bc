@@ -15,6 +15,7 @@ const S = {
   // open : sections du panneau de droite ouvertes ou fermées ; views : affichage mémorisé par table
   ui: { t: 0, f: null, filter: 'all', q: '', tab: 'map', row: null, open: {}, views: {} },
   clip: null,     // format copié
+  clipMap: null,  // correspondances de valeurs copiées : [[valeur source, valeur BC]]
   val: {},        // résultats de contrôle par table
 };
 const defaultSettings = () => ({ fillDefaults: true, truncate: true, skipEmpty: true, upperCode: true });

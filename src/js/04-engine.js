@@ -2,16 +2,9 @@
 /* 04-engine.js : Modèle de mapping, contexte source, moteur de transformation, contrôles, mapping automatique. */
 
 /* ---------------- modèle de mapping ---------------- */
-function newMap() { return { app: APP_ID, version: MAP_VERSION, settings: defaultSettings(), globalMap: [], tables: {} }; }
-/* correspondances globales (valeur source -> valeur BC), indexées sur la valeur source en minuscules ;
-   le tableau S.map.globalMap est remplacé à chaque modification, ce qui invalide l'index */
-let gmapCache = [null, null];
-function globalMapIndex() {
-  const g = S.map?.globalMap || [];
-  if (gmapCache[0] !== g) gmapCache = [g, new Map(g.filter(p => p[1] !== '').map(([a, b]) => [a.trim().toLowerCase(), b]))];
-  return gmapCache[1];
-}
+function newMap() { return { app: APP_ID, version: MAP_VERSION, settings: defaultSettings(), tables: {} }; }
 const newF = () => ({ kind: 'none', col: '', value: '', tpl: '', map: [], case: 'none', repFrom: '', repTo: '', repAt: 'start', padLen: 0, padChar: '0', padNum: true, prefix: '', suffix: '', dflt: '', filter: null });
+
 function tm(t) { return (S.map.tables[t.name] ||= { source: null, headerRow: 1, mode: 'keep', keys: null, fields: {} }); }
 function getF(t, f) { return tm(t).fields[f.key] || null; }
 function isMapped(F) { return !!F && ((F.kind === 'col' && !!F.col) || (F.kind === 'const') || (F.kind === 'tpl' && !!F.tpl)); }
@@ -100,6 +93,24 @@ function sourceValues(F, ctx) {
   return [...cnt].sort((a, b) => a[0].localeCompare(b[0], 'fr', { numeric: true }));
 }
 
+/* fusionne des correspondances (valeur source -> valeur BC) dans celles d'un champ alimenté par une colonne,
+   pour les seules valeurs présentes dans la colonne ; overwrite : remplace une correspondance déjà saisie.
+   -> {map, n : valeurs reprises, miss : valeurs absentes de la colonne} */
+function mergeValueMap(t, F, pairs, overwrite) {
+  const ctx = tableCtx(t);
+  const vals = new Map((ctx && F?.kind === 'col' ? sourceValues(F, ctx) : []).map(([v]) => [v.toLowerCase(), v]));
+  const map = (F?.map || []).map(p => [...p]); const at = new Map(map.map((p, i) => [p[0].trim().toLowerCase(), i]));
+  let n = 0, miss = 0;
+  for (const [a, b] of pairs) {
+    const k = String(a).trim().toLowerCase(); const v = vals.get(k);
+    if (v === undefined) { miss++; continue; }
+    const i = at.get(k);
+    if (i === undefined) { at.set(k, map.length); map.push([v, b]); n++; }
+    else if (overwrite || map[i][1] === '') { map[i][1] = b; n++; }
+  }
+  return { map, n, miss };
+}
+
 /* ---------------- moteur de transformation ---------------- */
 /* lecture de la valeur source d'un champ (colonne, constante ou combinaison) -> {get, missing} */
 function sourceGetter(F, ctx) {
@@ -139,31 +150,29 @@ function compileField(t, f, F, ctx) {
   }
   const vmap = new Map();
   for (const [a, b] of (F.map || [])) if (b !== '' && b != null) vmap.set(String(a).trim().toLowerCase(), b);
-  // les correspondances globales ne portent que sur les valeurs venues de la source, pas sur les constantes
-  const gmap = F.kind === 'col' || F.kind === 'tpl' ? globalMapIndex() : new Map();
   const padLen = +F.padLen || 0, padChar = (F.padChar || '0')[0], padNum = F.padNum !== false;
   const kase = F.case || 'none', prefix = F.prefix || '', suffix = F.suffix || '', ifEmpty = F.dflt || '';
   const repFrom = F.repFrom || '', repTo = F.repTo || '', repAt = F.repAt || 'start';
   return row => {
-    let s = get(row).trim(); const input = s; let g = false;
-    if (vmap.size || gmap.size) { const k = s.toLowerCase(); if (vmap.has(k)) s = vmap.get(k); else if (gmap.has(k)) { s = gmap.get(k); g = true; } }
+    let s = get(row).trim(); const input = s;
+    if (vmap.size) { const k = s.toLowerCase(); if (vmap.has(k)) s = vmap.get(k); }
     if (repFrom) s = replaceText(s, repFrom, repTo, repAt);
     if (s === '') {
-      if (ifEmpty !== '') { const r = convertTo(f, ifEmpty, set); return { v: r.v, e: r.e, w: r.w, input, d: false, g }; }
+      if (ifEmpty !== '') { const r = convertTo(f, ifEmpty, set); return { v: r.v, e: r.e, w: r.w, input, d: false }; }
       return { v: dflt, d: dflt !== '', input, empty: true };
     }
     if (kase === 'upper') s = s.toUpperCase(); else if (kase === 'lower') s = s.toLowerCase(); else if (kase === 'title') s = titleCase(s);
     if (padLen > 0 && s.length < padLen && (!padNum || /^\d+$/.test(s))) s = padChar.repeat(padLen - s.length) + s;
     if (prefix) s = prefix + s; if (suffix) s = s + suffix;
     const r = convertTo(f, s, set);
-    return { v: r.v, e: r.e, w: r.w, input, d: false, g };
+    return { v: r.v, e: r.e, w: r.w, input, d: false };
   };
 }
 
 /* contrôle d'un champ sur toutes les lignes */
 function checkField(t, f) {
   const ctx = tableCtx(t); const F = getF(t, f);
-  const out = { err: 0, warn: 0, glob: 0, ex: [], sampleIn: undefined, sampleOut: '', sampleDef: false, sampleBad: false, missing: null };
+  const out = { err: 0, warn: 0, ex: [], sampleIn: undefined, sampleOut: '', sampleDef: false, sampleBad: false, missing: null };
   if (!ctx || !ctx.rows.length) { out.sampleOut = S.map.settings.fillDefaults ? f.dflt : ''; out.sampleDef = true; return out; }
   if (F?.kind === 'col' && F.col && !ctx.byName.has(F.col)) {
     out.missing = `colonne « ${F.col} » introuvable dans la feuille source`;
@@ -172,7 +181,7 @@ function checkField(t, f) {
   const fn = compileField(t, f, F, ctx); const mapped = isMapped(F);
   let got = false;
   for (let i = 0; i < ctx.rows.length; i++) {
-    const r = fn(ctx.rows[i]); if (r.g) out.glob++;
+    const r = fn(ctx.rows[i]);
     if (r.e) { out.err++; if (out.ex.length < 8) out.ex.push({ row: ctx.rowNums[i], msg: r.e, lvl: 'err' }); }
     else if (r.w) { out.warn++; if (out.ex.length < 8) out.ex.push({ row: ctx.rowNums[i], msg: r.w, lvl: 'warn' }); }
     if (!got && (r.input || i === ctx.rows.length - 1 || !mapped)) { got = true; out.sampleIn = r.input ?? ''; out.sampleOut = r.v; out.sampleDef = !!r.d; out.sampleBad = !!r.e; }
@@ -277,22 +286,13 @@ function matchSheet(t) {
   }
   return bs >= 0.75 ? best.name : null;
 }
-function guessHeaderRow(sheet) {
-  let best = 1, bn = -1;
-  for (let r = 0; r < Math.min(10, sheet.rows.length); r++) {
-    const row = sheet.rows[r] || []; const n = row.filter(c => c && c.t === 's' && c.v.trim()).length;
-    if (n > bn * 1.2) { bn = n; best = r + 1; }
-  }
-  return best;
-}
 function dataRowCount(sheetName, headerRow) { const ctx = getCtx({ source: sheetName, headerRow }); return ctx ? ctx.rows.length : 0; }
 function setupFresh() {
   S.map = newMap(); let n = 0;
   for (const t of S.pkg.tables) {
     const T = tm(t); const src = matchSheet(t);
     if (src) {
-      const sh = S.raw.sheets.find(s => s.name === src);
-      T.source = src; T.headerRow = guessHeaderRow(sh);
+      T.source = src; T.headerRow = 1;
       T.mode = dataRowCount(src, T.headerRow) > 0 ? 'replace' : 'keep';
       n += autoMapTable(t);
     }

@@ -14,16 +14,32 @@ function exportMapping() {
 function validateMapping(obj) {
   if (!obj || typeof obj !== 'object' || !obj.tables) throw new Error("Ce fichier ne contient pas de modèle de mapping.");
   const m = newMap(); m.settings = { ...defaultSettings(), ...(obj.settings || {}) };
-  if (Array.isArray(obj.globalMap)) m.globalMap = obj.globalMap.filter(p => Array.isArray(p) && p.length === 2).map(p => [String(p[0]), String(p[1])]);
+  // anciennes correspondances partagées (correspondance globale, modèles de correspondance) : reprises à l'application
+  // du mapping dans les correspondances de chaque champ, pour les valeurs présentes dans sa colonne
+  const legacy = { global: [], fields: {} };
+  const pair = (a, b) => String(b ?? '').trim() ? [[String(a ?? '').trim(), String(b).trim()]] : [];
+  if (Array.isArray(obj.globalMap)) legacy.global = obj.globalMap.filter(p => Array.isArray(p) && p.length === 2).flatMap(p => pair(p[0], p[1]));
+  const models = new Map((Array.isArray(obj.models) ? obj.models : []).filter(M => M && Array.isArray(M.cols) && Array.isArray(M.rows)).map(M => [M.id, M]));
   for (const [tn, T] of Object.entries(obj.tables)) {
     const fields = {};
-    for (const [k, F] of Object.entries(T.fields || {})) {
+    for (const [k, { model, ...F }] of Object.entries(T.fields || {})) {
       const filter = Array.isArray(F.filter) ? F.filter.map(String) : null;
+      const M = model && models.get(model.id); const c = M ? M.cols.indexOf(model.col) : -1;
+      if (c >= 0 && c !== +M.key) (legacy.fields[tn] ||= {})[k] = M.rows.filter(Array.isArray).flatMap(r => pair(r[+M.key], r[c]));
       fields[k] = { ...newF(), ...F, filter, map: Array.isArray(F.map) ? F.map.filter(p => Array.isArray(p) && p.length === 2).map(p => [String(p[0]), String(p[1])]) : [] };
     }
-    m.tables[tn] = { source: T.source ?? null, headerRow: +T.headerRow || 1, mode: ['replace', 'append', 'keep'].includes(T.mode) ? T.mode : 'keep', keys: Array.isArray(T.keys) && T.keys.length ? T.keys.map(String) : null, fields };
+    m.tables[tn] = { source: T.source ?? null, headerRow: 1, mode: ['replace', 'append', 'keep'].includes(T.mode) ? T.mode : 'keep', keys: Array.isArray(T.keys) && T.keys.length ? T.keys.map(String) : null, fields };
   }
+  if (legacy.global.length || Object.keys(legacy.fields).length) m.legacy = legacy;
   return m;
+}
+/* reprise des anciennes correspondances partagées ; une correspondance déjà saisie sur le champ reste prioritaire */
+function applyLegacyMaps(L) {
+  for (const t of S.pkg.tables) for (const f of t.fields) {
+    const T = tm(t); const F = T.fields[f.key]; if (F?.kind !== 'col') continue;
+    const pairs = [...(L.fields[t.name]?.[f.key] || []), ...L.global]; if (!pairs.length) continue;
+    const r = mergeValueMap(t, F, pairs, false); if (r.n) T.fields[f.key] = { ...F, map: r.map };
+  }
 }
 async function importMappingFile(file) {
   let obj; try { obj = JSON.parse(await file.text()); } catch { throw new Error("Le fichier de mapping n'est pas un JSON valide."); }
@@ -38,6 +54,7 @@ function applyImportedMapping(m, silent) {
     for (const k in m.tables[tn].fields) if (!t.fields.some(f => f.key === k)) unknownF++;
     const T = m.tables[tn]; if (T.source && !S.raw.sheets.some(s => s.name === T.source)) { T.source = null; T.mode = 'keep'; }
   }
+  if (m.legacy) { applyLegacyMaps(m.legacy); delete m.legacy; }
   validateAll(); renderAll();
   const extra = [unknownT && plural(unknownT, 'table absente'), unknownF && plural(unknownF, 'champ absent')].filter(Boolean).join(', ');
   if (!silent || extra) toast('Mapping appliqué' + (extra ? ` (${extra} du package, ignorés)` : '') + '.');
