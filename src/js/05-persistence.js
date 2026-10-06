@@ -28,7 +28,8 @@ function validateMapping(obj) {
       if (c >= 0 && c !== +M.key) (legacy.fields[tn] ||= {})[k] = M.rows.filter(Array.isArray).flatMap(r => pair(r[+M.key], r[c]));
       fields[k] = { ...newF(), ...F, filter, map: Array.isArray(F.map) ? F.map.filter(p => Array.isArray(p) && p.length === 2).map(p => [String(p[0]), String(p[1])]) : [] };
     }
-    m.tables[tn] = { source: T.source ?? null, headerRow: 1, mode: ['replace', 'append', 'keep'].includes(T.mode) ? T.mode : 'keep', keys: Array.isArray(T.keys) && T.keys.length ? T.keys.map(String) : null, fields };
+    const manual = (Array.isArray(T.manual) ? T.manual : []).filter(r => r && typeof r === 'object' && !Array.isArray(r)).map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, String(v ?? '')])));
+    m.tables[tn] = { source: T.source ?? null, headerRow: 1, mode: ['replace', 'append', 'keep'].includes(T.mode) ? T.mode : 'keep', keys: Array.isArray(T.keys) && T.keys.length ? T.keys.map(String) : null, fields, manual };
   }
   if (legacy.global.length || Object.keys(legacy.fields).length) m.legacy = legacy;
   return m;
@@ -52,7 +53,7 @@ function applyImportedMapping(m, silent) {
   for (const tn in m.tables) {
     const t = S.pkg.tables.find(x => x.name === tn); if (!t) { unknownT++; continue; }
     for (const k in m.tables[tn].fields) if (!t.fields.some(f => f.key === k)) unknownF++;
-    const T = m.tables[tn]; if (T.source && !S.raw.sheets.some(s => s.name === T.source)) { T.source = null; T.mode = 'keep'; }
+    const T = m.tables[tn]; if (T.source && !S.raw.sheets.some(s => s.name === T.source)) { T.source = null; if (!T.manual.length) T.mode = 'keep'; }
   }
   if (m.legacy) { applyLegacyMaps(m.legacy); delete m.legacy; }
   validateAll(); renderAll();

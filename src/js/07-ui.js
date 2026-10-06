@@ -19,10 +19,11 @@ function renderTables() {
     const T = tm(t); const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
     // badge : lignes source retenues par les filtres ; sa couleur donne l'état des contrôles
     const iss = tableIssues(t); const mode = effectiveMode(t);
-    const n = mode === 'keep' ? 0 : tableCtx(t).rows.length;
+    const n = mode === 'keep' ? 0 : outCount(t); const nm = mode === 'keep' ? 0 : manualRows(t).length;
     const state = iss.err ? ['err', `${plural(iss.err, 'champ')} en erreur`] : iss.warn ? ['warn', `${plural(iss.warn, 'champ')} en alerte`] : ['ok', 'aucune anomalie'];
+    const what = plural(n - nm, 'ligne source retenue', 'lignes source retenues') + (nm ? ` + ${plural(nm, 'ligne ajoutée', 'lignes ajoutées')}` : '');
     const badge = mode === 'keep' ? '<span class="pill mute">Inchangée</span>'
-      : `<span class="pill ${state[0]}" title="${plural(n, 'ligne source retenue', 'lignes source retenues')} (${mode === 'append' ? 'ajout' : 'remplacement'}) : ${state[1]}">${nf(n)}</span>`;
+      : `<span class="pill ${state[0]}" title="${what} (${mode === 'append' ? 'ajout' : 'remplacement'}) : ${state[1]}">${nf(n)}</span>`;
     return `<button class="titem${i === S.ui.t ? ' sel' : ''}" data-t="${i}">
       <div class="tn"><span>${esc(t.name)}</span>${badge}</div>
       <div class="ts">${T.source ? 'Source : ' + esc(T.source) : 'Aucune feuille source'}</div>
@@ -38,7 +39,7 @@ function renderCenter() {
     <div class="trow">
       <h2>${esc(t.name)}</h2>
       <select id="selSource" aria-label="Feuille source Navision" title="Feuille source Navision"><option value="">Aucune feuille source</option>${sheets}</select>
-      <select id="selMode" aria-label="Données du package" title="Sort des lignes déjà présentes dans le package" ${T.source ? '' : 'disabled'}>
+      <select id="selMode" aria-label="Données du package" title="Sort des lignes déjà présentes dans le package" ${T.source || manualAll(t).length ? '' : 'disabled'}>
         <option value="replace"${T.mode === 'replace' ? ' selected' : ''}>Remplacer par la source</option>
         <option value="append"${T.mode === 'append' ? ' selected' : ''}>Ajouter à l'existant</option>
         <option value="keep"${T.mode === 'keep' ? ' selected' : ''}>Laisser inchangées</option></select>
@@ -49,12 +50,13 @@ function renderCenter() {
     <label class="search">${ICON_SEARCH}<input type="search" id="inSearch" placeholder="Rechercher" aria-label="${S.ui.tab === 'map' ? 'Rechercher un champ ou une colonne' : 'Rechercher un champ, une colonne ou une valeur'}" value="${esc(S.ui.q)}"></label>
     <div class="seg" role="tablist">
       <button role="tab" data-tab="map" aria-selected="${S.ui.tab === 'map'}">Correspondances</button>
-      <button role="tab" data-tab="prev" aria-selected="${S.ui.tab === 'prev'}">Aperçu du résultat</button>
+      <button role="tab" data-tab="prev" aria-selected="${S.ui.tab === 'prev'}" title="Lignes écrites dans le package : celles ajoutées ici, puis celles générées depuis la source">Résultat</button>
     </div>
     <div class="spacer"></div>
     <select id="selFilter" aria-label="Champs affichés" ${S.ui.tab === 'map' ? '' : 'hidden'}>
       ${[['all', 'Tous les champs'], ['mapped', 'Alimentés'], ['unmapped', 'Non alimentés'], ['issues', 'Anomalies']].map(([k, l]) => `<option value="${k}"${S.ui.filter === k ? ' selected' : ''}>${l}</option>`).join('')}
     </select>
+    <button class="btn" id="btnAddRow" ${S.ui.tab === 'prev' ? '' : 'hidden'} title="Créer une ligne saisie à la main dans le package">+ Ajouter une ligne</button>
   </div>
   <div class="gridwrap" id="gridwrap"></div>`;
   renderGrid();
@@ -125,36 +127,71 @@ function markText(s, q) {
   while ((j = low.indexOf(q, i)) >= 0) { out += esc(s.slice(i, j)) + '<mark>' + esc(s.slice(j, j + q.length)) + '</mark>'; i = j + q.length; }
   return out + esc(s.slice(i));
 }
+/* vue « Résultat » : les lignes ajoutées à la main (modifiables), puis celles générées depuis la source */
 function renderPreview() {
-  const t = curT(); const ctx = tableCtx(t); const wrap = $('#gridwrap');
-  if (!ctx) { wrap.innerHTML = `<div class="empty">Choisissez une feuille source pour voir les lignes qui seront générées.</div>`; return; }
+  const t = curT(); const ctx = tableCtx(t); const wrap = $('#gridwrap'); const man = manualAll(t);
+  if (!ctx && !man.length) { wrap.innerHTML = `<div class="empty">Choisissez une feuille source, ou créez des lignes avec « Ajouter une ligne ».</div>`; return; }
   const N = 200; const q = S.ui.q.trim().toLowerCase(); const nq = norm(S.ui.q);
-  const fns = t.fields.map(f => compileField(t, f, getF(t, f), ctx));
+  const nsrc = ctx ? ctx.rows.length : 0;
+  const fns = ctx ? t.fields.map(f => compileField(t, f, getF(t, f), ctx)) : [];
   const text = r => String(r.e && r.v === '' ? (r.input ?? '') : r.v);
   // lignes : celles qui contiennent la recherche dans une valeur, sinon toutes
   const shown = []; let hits = 0;
-  if (q) for (let i = 0; i < ctx.rows.length; i++) {
+  if (q) for (let i = 0; i < nsrc; i++) {
     const rs = fns.map(fn => fn(ctx.rows[i]));
     if (rs.some(r => text(r).toLowerCase().includes(q)) && ++hits <= N) shown.push([i, rs]);
   }
-  if (!hits) for (let i = 0; i < Math.min(N, ctx.rows.length); i++) shown.push([i, fns.map(fn => fn(ctx.rows[i]))]);
+  if (!hits) for (let i = 0; i < Math.min(N, nsrc); i++) shown.push([i, fns.map(fn => fn(ctx.rows[i]))]);
   // colonnes : toutes affichées, celles dont le nom correspond sont surlignées
   const nameHit = c => !!nq && (norm(t.fields[c].caption).includes(nq) || norm(getF(t, t.fields[c])?.col || '').includes(nq));
   const cols = t.fields.map((f, c) => c);
-  if (q && !hits && !cols.some(nameHit)) { wrap.innerHTML = `<div class="empty">Aucun champ ni aucune valeur ne correspond à « ${esc(S.ui.q.trim())} ».</div>`; return; }
+  if (q && !hits && !cols.some(nameHit) && !man.length) { wrap.innerHTML = `<div class="empty">Aucun champ ni aucune valeur ne correspond à « ${esc(S.ui.q.trim())} ».</div>`; return; }
   const vq = hits ? q : '';
   let h = `<table class="ptable"><thead><tr><th class="rn">Ligne</th>${cols.map(c => { const f = t.fields[c];
     return `<th data-k="${esc(f.key)}" class="${isMapped(getF(t, f)) ? '' : 'unm'}${nameHit(c) ? ' qhit' : ''}" title="${esc(f.caption)} : cliquer pour régler ce champ">${markText(f.caption, nameHit(c) ? q : '')}<small>${esc(typeLabel(f.type))}</small></th>`; }).join('')}</tr></thead><tbody>`;
+  // lignes ajoutées : toujours affichées, en tête comme dans le fichier ; options et booléens proposent leurs valeurs
+  const lists = t.fields.map((f, c) => { const v = f.type.base === 'Option' ? f.type.options.map(o => o.c) : f.type.base === 'Boolean' ? ['true', 'false'] : null;
+    return v ? `<datalist id="ml_${c}">${v.map(x => `<option value="${esc(x)}">`).join('')}</datalist>` : ''; });
+  man.forEach((m, i) => {
+    h += `<tr class="man${i === man.length - 1 ? ' last' : ''}" data-m="${i}"><td class="rn" title="Ligne ajoutée à la main"><span>+${i + 1}</span><button class="mdel" data-mdel="${i}" title="Supprimer cette ligne" aria-label="Supprimer la ligne ajoutée ${i + 1}">×</button></td>`;
+    for (const c of cols) { const f = t.fields[c];
+      h += `<td class="mc"><input type="text" class="minp" data-m="${i}" data-f="${esc(f.key)}" value="${esc(m[f.key] ?? '')}"${lists[c] ? ` list="ml_${c}"` : ''} aria-label="${esc(f.caption)}, ligne ajoutée ${i + 1}"></td>`; }
+    h += '</tr>';
+  });
   for (const [i, rs] of shown) {
     h += `<tr data-r="${ctx.rowNums[i]}"${ctx.rowNums[i] === S.ui.row ? ' class="rsel"' : ''}><td class="rn">${ctx.rowNums[i]}</td>`;
     for (const c of cols) { const r = rs[c]; const cl = r.e ? 'err' : r.w ? 'warn' : r.d ? 'def' : ''; h += `<td class="${cl}" title="${esc(r.e || r.w || r.v)}">${markText(text(r), vq)}</td>`; }
     h += '</tr>';
   }
-  h += '</tbody></table>';
-  if (hits) h += `<div class="empty">${plural(hits, 'ligne contient', 'lignes contiennent')} « ${esc(S.ui.q.trim())} »${hits > N ? `, ${N} premières affichées` : ''}.</div>`;
-  else if (ctx.rows.length > N) h += `<div class="empty">Aperçu limité aux ${N} premières lignes sur ${nf(ctx.rows.length)}.</div>`;
+  h += '</tbody></table>' + lists.join('');
+  if (manualRows(t).length && effectiveMode(t) === 'keep') h += `<div class="empty">Les données de la table sont laissées inchangées : les lignes ajoutées ne seront pas écrites. Choisissez « Remplacer par la source » ou « Ajouter à l'existant ».</div>`;
+  if (hits) h += `<div class="empty">${plural(hits, 'ligne source contient', 'lignes source contiennent')} « ${esc(S.ui.q.trim())} »${hits > N ? `, ${N} premières affichées` : ''}.</div>`;
+  else if (nsrc > N) h += `<div class="empty">Affichage limité aux ${N} premières lignes de la source sur ${nf(nsrc)}.</div>`;
   wrap.innerHTML = h;
+  for (const inp of $$('.minp', wrap)) paintManualCell(inp);
   markPreviewCol(false);
+}
+/* cellule d'une ligne ajoutée : état de contrôle de la valeur saisie, valeur par défaut BC en indication si vide */
+function paintManualCell(inp) {
+  const f = curT().fields.find(x => x.key === inp.dataset.f); const r = manualCell(f, inp.value);
+  const td = inp.parentElement; td.classList.toggle('err', !!r.e); td.classList.toggle('warn', !r.e && !!r.w);
+  inp.title = r.e || r.w || (r.input !== '' && r.v !== r.input ? `Écrit : ${r.v}` : '');
+  inp.placeholder = r.d ? r.v : '';
+}
+const revalidateManual = debounce(t => { validateTable(t); renderTables(); refreshFacts(t); refreshInspectorLive(); }, 250);
+/* nouvelle ligne vide ; une table laissée inchangée faute de source passe en ajout pour que la ligne soit écrite */
+function addManualRow(t, col = 0) {
+  const T = tm(t); (T.manual ||= []).push({});
+  if (T.mode === 'keep' && !T.source) T.mode = 'append';
+  S.ui.tab = 'prev'; renderCenter(); autosave();
+  const inp = $$(`.ptable tr.man[data-m="${T.manual.length - 1}"] .minp`)[col];
+  inp?.scrollIntoView({ block: 'nearest' }); inp?.focus();
+}
+function deleteManualRow(t, i) {
+  const T = tm(t); const w = $('#gridwrap'); const top = w.scrollTop, left = w.scrollLeft;
+  T.manual.splice(i, 1);
+  validateTable(t); renderTables(); refreshFacts(t); renderCenter(); autosave();
+  const w2 = $('#gridwrap'); w2.scrollTop = top; w2.scrollLeft = left;
 }
 /* met en évidence la colonne du champ sélectionné, et la fait défiler au centre si demandé */
 function markPreviewCol(scroll) {
@@ -277,7 +314,7 @@ function refreshInspectorLive() {
   const si = $('#body-iss'); if (!si) return;
   const secIss = $('#sec-iss'); const hIss = $('#hint-iss');
   // la section n'apparaît que s'il y a des anomalies
-  secIss.hidden = !(tableCtx(t) && (V.err || V.warn)); if (secIss.hidden) return;
+  secIss.hidden = !((tableCtx(t) || manualRows(t).length) && (V.err || V.warn)); if (secIss.hidden) return;
   hIss.innerHTML = [V.err && `<span class="pill err">${plural(V.err, 'erreur')}</span>`, V.warn && `<span class="pill warn">${plural(V.warn, 'alerte')}</span>`].filter(Boolean).join(' ');
   si.innerHTML = `<ul class="issues">${V.ex.map(x => `<li><b style="color:var(--${x.lvl === 'err' ? 'err' : 'warn'})">${x.row ? 'Ligne ' + x.row : 'Champ'}</b> : ${esc(x.msg)}</li>`).join('')}</ul>`;
 }
@@ -287,7 +324,7 @@ function inspectorHelp(t) {
   // sans champ sélectionné : seulement ce qui demande une action
   return `<div class="insp-inner">
     <div class="phead insp-head"><h3>${esc(t.name)}</h3></div>
-    ${!T.source ? `<div class="sec"><div class="note">Associez une feuille de l'export Navision à cette table avec la liste à droite du nom de la table.</div></div>` : ''}
+    ${!T.source && !manualRows(t).length ? `<div class="sec"><div class="note">Associez une feuille de l'export Navision à cette table avec la liste à droite du nom de la table.</div></div>` : ''}
     ${K && (K.dup || K.empty) && effectiveMode(t) !== 'keep' ? `<div class="sec"><h4>Clé primaire (${esc(keyLabel(t))})</h4><ul class="issues">${K.ex.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}
     ${iss.length ? `<div class="sec"><h4>Champs à revoir</h4><ul class="issues">${iss.map(([f, v]) => `<li><a href="#" data-goto="${esc(f.key)}">${esc(f.caption)}</a> : ${[v.err && plural(v.err, 'erreur'), v.warn && plural(v.warn, 'alerte')].filter(Boolean).join(', ')}</li>`).join('')}</ul></div>` : ''}
   </div>`;
@@ -554,13 +591,18 @@ function bindApp() {
       T.source = e.target.value || null;
       if (T.source) {
         T.headerRow = 1;
-        T.mode = dataRowCount(T.source, T.headerRow) > 0 ? (T.mode === 'keep' ? 'replace' : T.mode) : 'keep';
+        T.mode = dataRowCount(T.source, T.headerRow) > 0 ? (T.mode === 'keep' ? 'replace' : T.mode) : manualRows(t).length ? T.mode : 'keep';
         const has = t.fields.some(f => isMapped(getF(t, f)));
         ctxCache.clear();
         if (!has) { const n = autoMapTable(t); if (n) toast(`${plural(n, 'champ associé', 'champs associés')} automatiquement.`); }
-      } else T.mode = 'keep';
+      } else if (!manualRows(t).length) T.mode = 'keep';
       changeTableSource(t);
     } else if (e.target.id === 'selFilter') { S.ui.filter = e.target.value; renderGrid(); }
+    else if (e.target.classList.contains('minp')) { // saisie validée : valeur ramenée au format BC si elle est acceptée telle quelle
+      const inp = e.target; const m = manualAll(t)[+inp.dataset.m]; const f = t.fields.find(x => x.key === inp.dataset.f);
+      const r = manualCell(f, inp.value);
+      if (m && r.input !== '' && !r.e && !r.w && r.v !== inp.value) { inp.value = m[f.key] = r.v; paintManualCell(inp); autosave(); }
+    }
     else if (e.target.id === 'selMode') {
       T.mode = e.target.value; validateTable(t); renderTables(); renderCenter(); autosave();
       if (T.mode === 'replace' && t.existing.length) toast(`Les ${nf(t.existing.length)} lignes actuelles de « ${t.name} » seront remplacées.`);
@@ -570,7 +612,9 @@ function bindApp() {
     const t = curT(); const T = tm(t);
     const tab = e.target.closest('[data-tab]'); if (tab) { S.ui.tab = tab.dataset.tab; renderCenter(); markPreviewCol(true); return; }
     const th = e.target.closest('.ptable th[data-k]'); if (th) { selectField(th.dataset.k, false); return; }
-    const tr = e.target.closest('.ptable tbody tr'); // sélection de ligne, purement visuelle
+    if (e.target.closest('#btnAddRow')) { addManualRow(t); return; }
+    const del = e.target.closest('[data-mdel]'); if (del) { deleteManualRow(t, +del.dataset.mdel); return; }
+    const tr = e.target.closest('.ptable tbody tr:not(.man)'); // sélection de ligne, purement visuelle
     if (tr) { S.ui.row = +tr.dataset.r; $$('.ptable tr.rsel').forEach(x => x.classList.remove('rsel')); tr.classList.add('rsel'); return; }
     const pick = e.target.closest('[data-pick]'); if (pick) { selectField(pick.dataset.pick, false); openPicker(pick, pick.dataset.pick); e.stopPropagation(); return; }
     const fb = e.target.closest('[data-flt]');
@@ -578,7 +622,22 @@ function bindApp() {
     const row = e.target.closest('.frow'); if (row) selectField(row.dataset.k);
   });
   center.addEventListener('input', debounce(e => { if (e.target.id === 'inSearch') { S.ui.q = e.target.value; renderGrid(); } }, 120));
+  center.addEventListener('input', e => {
+    const inp = e.target; if (!inp.classList.contains('minp')) return;
+    const t = curT(); const m = manualAll(t)[+inp.dataset.m]; if (!m) return;
+    if (inp.value === '') delete m[inp.dataset.f]; else m[inp.dataset.f] = inp.value;
+    paintManualCell(inp); revalidateManual(t); autosave();
+  });
   center.addEventListener('keydown', e => {
+    // lignes ajoutées : Entrée passe à la même colonne de la ligne suivante, en créant une ligne après la dernière
+    const mi = e.target.closest('.minp');
+    if (mi && e.key === 'Enter') {
+      e.preventDefault(); mi.dispatchEvent(new Event('change', { bubbles: true }));
+      const col = mi.parentElement.cellIndex - 1; const next = $(`.ptable tr.man[data-m="${+mi.dataset.m + 1}"]`);
+      if (next) next.querySelectorAll('.minp')[col]?.focus();
+      else if (Object.keys(manualAll(curT())[+mi.dataset.m] || {}).length) addManualRow(curT(), col); // pas de nouvelle ligne sous une ligne vide
+      return;
+    }
     const row = e.target.closest('.frow'); if (!row) return;
     const rows = $$('.frow'); const i = rows.indexOf(row);
     if (e.key === 'ArrowDown' && i < rows.length - 1) { selectField(rows[i + 1].dataset.k); e.preventDefault(); }
@@ -688,34 +747,54 @@ function openSettings() {
     d.close(); ctxCache.clear(); validateAll(); renderAll(); autosave(); toast('Options appliquées.');
   };
 }
+/* récapitulatif de génération : une case par table à générer, toutes cochées ; une table décochée est laissée inchangée */
 function openGenerate() {
-  const rows = S.pkg.tables.map(t => {
-    const T = tm(t); const mode = effectiveMode(t); const ctx = tableCtx(t); const iss = tableIssues(t);
-    const n = mode === 'keep' ? t.existing.length : mode === 'append' ? t.existing.length + ctx.rows.length : ctx.rows.length;
-    const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
-    const modeTxt = mode === 'keep' ? 'Inchangée' : mode === 'append' ? 'Ajout' : 'Remplacement';
-    return `<tr><td>${esc(t.name)}</td><td>${esc(T.source || '-')}</td><td>${modeTxt}</td><td class="num">${mode === 'keep' ? '-' : mapped + ' / ' + t.fields.length}</td><td class="num">${nf(n)}</td>
-      <td>${mode === 'keep' ? '' : iss.err ? `<span class="pill err">${plural(iss.err, 'champ')} en erreur</span>` : iss.warn ? `<span class="pill warn">${plural(iss.warn, 'champ')} en alerte</span>` : '<span class="pill ok">OK</span>'}</td></tr>`;
-  }).join('');
-  const anyErr = S.pkg.tables.some(t => tableIssues(t).err);
-  const anyIssue = S.pkg.tables.some(t => { const i = tableIssues(t); return i.err || i.warn; });
+  const live = S.pkg.tables.filter(t => effectiveMode(t) !== 'keep');
+  const sel = new Set(live.map(t => t.name));
+  const skip = () => new Set(S.pkg.tables.filter(t => !sel.has(t.name)).map(t => t.name));
   $('#dlgGenBody').innerHTML = `<h3>Générer le package</h3>
-    <div class="sub">Le fichier produit reprend la structure de « ${esc(S.pkg.fileName)} » (mappage XML, en-têtes, commentaires) avec les nouvelles lignes.</div>
-    <table class="sumtable"><thead><tr><th>Table</th><th>Source</th><th>Données</th><th class="num">Champs</th><th class="num">Lignes finales</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-    ${anyErr ? `<div class="note err" style="margin-top:14px">Des erreurs subsistent : les valeurs concernées seront laissées vides dans le package (ou gardées telles quelles pour les options). Téléchargez le rapport pour les corriger.</div>` : ''}
+    <div class="sub">Le fichier produit reprend la structure de « ${esc(S.pkg.fileName)} » (mappage XML, en-têtes, commentaires) avec les nouvelles lignes. Les tables décochées sont laissées inchangées.</div>
+    <table class="sumtable"><thead><tr><th class="ck"><input type="checkbox" id="genAll" title="Tout cocher ou décocher" aria-label="Générer toutes les tables"${live.length ? '' : ' disabled'}></th><th>Table</th><th>Source</th><th>Données</th><th class="num">Champs</th><th class="num">Résultat</th><th></th></tr></thead><tbody id="genRows"></tbody></table>
+    <div id="genNote"></div>
     <div class="actions">
-      ${anyIssue ? '<button class="btn" id="genReport">Télécharger le rapport des anomalies</button>' : ''}
+      <button class="btn" id="genReport" hidden>Télécharger le rapport des anomalies</button>
       <span style="flex:1"></span>
       <button class="btn" id="genCancel">Annuler</button>
       <button class="btn primary" id="genGo">Générer et télécharger</button>
     </div>`;
+  const draw = () => {
+    $('#genRows').innerHTML = S.pkg.tables.map(t => {
+      const T = tm(t); const can = effectiveMode(t) !== 'keep'; const on = sel.has(t.name);
+      const mode = on ? effectiveMode(t) : 'keep'; const iss = tableIssues(t);
+      const n = mode === 'keep' ? t.existing.length : mode === 'append' ? t.existing.length + outCount(t) : outCount(t);
+      const mapped = t.fields.filter(f => isMapped(getF(t, f))).length;
+      const modeTxt = mode === 'keep' ? 'Inchangée' : mode === 'append' ? 'Ajout' : 'Remplacement';
+      return `<tr class="${can ? 'pick' : ''}${can && !on ? ' off' : ''}" data-gt="${esc(t.name)}"><td class="ck"><input type="checkbox" ${on ? 'checked' : ''}${can ? '' : ' disabled'} title="${can ? 'Générer cette table' : 'Rien à générer : table laissée inchangée'}" aria-label="Générer ${esc(t.name)}"></td>
+        <td>${esc(t.name)}</td><td>${esc(T.source || '-')}</td><td>${modeTxt}</td><td class="num">${mode === 'keep' ? '-' : mapped + ' / ' + t.fields.length}</td><td class="num">${nf(n)}</td>
+        <td>${mode === 'keep' ? '' : iss.err ? `<span class="pill err">${plural(iss.err, 'champ')} en erreur</span>` : iss.warn ? `<span class="pill warn">${plural(iss.warn, 'champ')} en alerte</span>` : '<span class="pill ok">OK</span>'}</td></tr>`;
+    }).join('');
+    // case d'en-tête : cochée, décochée ou partielle selon les tables générables
+    const all = $('#genAll'); all.checked = live.length > 0 && sel.size === live.length; all.indeterminate = sel.size > 0 && sel.size < live.length;
+    const chosen = live.filter(t => sel.has(t.name));
+    $('#genNote').innerHTML = chosen.some(t => tableIssues(t).err) ? `<div class="note err" style="margin-top:14px">Des erreurs subsistent : les valeurs concernées seront laissées vides dans le package (ou gardées telles quelles pour les options). Téléchargez le rapport pour les corriger.</div>` : '';
+    $('#genReport').hidden = !chosen.some(t => { const i = tableIssues(t); return i.err || i.warn; });
+    const go = $('#genGo'); go.disabled = !sel.size; go.title = sel.size ? '' : 'Cochez au moins une table à générer';
+  };
+  draw();
   const d = $('#dlgGen'); d.showModal();
+  $('#genAll').onchange = e => { sel.clear(); if (e.target.checked) for (const t of live) sel.add(t.name); draw(); };
+  // un clic n'importe où sur la ligne coche ou décoche la table
+  $('#genRows').onclick = e => {
+    const tr = e.target.closest('tr.pick'); if (!tr) return;
+    const k = tr.dataset.gt; if (sel.has(k)) sel.delete(k); else sel.add(k); draw();
+    $(`#genRows tr[data-gt="${CSS.escape(k)}"] input`)?.focus();
+  };
   $('#genCancel').onclick = () => d.close();
-  if ($('#genReport')) $('#genReport').onclick = reportCSV;
+  $('#genReport').onclick = () => reportCSV(skip());
   $('#genGo').onclick = async () => {
     d.close(); busy(true, 'Génération du package…'); await nextFrame();
     try {
-      const { blob } = await generatePackage();
+      const { blob } = await generatePackage(skip());
       const name = `${baseName(S.pkg.fileName)}_rempli_${stamp()}.xlsx`;
       download(blob, name); busy(false);
       toast(`Package généré : ${name}`);

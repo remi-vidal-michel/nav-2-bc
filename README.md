@@ -58,9 +58,11 @@ Sélectionnez un champ pour ouvrir le panneau de droite. Vous pouvez :
 - **Copier et coller les correspondances de valeurs** d'un champ à l'autre, par exemple pour reprendre la même correspondance analytique dans chaque table qui l'utilise. Le collage ne reprend que les valeurs présentes dans la colonne Navision du champ ; les autres sont ignorées et leur nombre est indiqué. Une valeur déjà remplacée sur le champ prend la valeur collée.
 - **Copier et coller la mise en forme** d'un champ à l'autre.
 
-Sous la source, le panneau affiche les lignes en anomalie. Ces sections se replient d'un clic sur leur titre. Repliées, elles gardent l'essentiel en résumé : le nombre d'anomalies ou la mise en forme appliquée. Pour voir le résultat ligne à ligne, utilisez le mode **Aperçu du résultat**.
+Sous la source, le panneau affiche les lignes en anomalie. Ces sections se replient d'un clic sur leur titre. Repliées, elles gardent l'essentiel en résumé : le nombre d'anomalies ou la mise en forme appliquée. Pour voir le résultat ligne à ligne, utilisez le mode **Résultat**.
 
-Le mode **Aperçu du résultat** montre la table telle qu'elle sera écrite dans le package. La colonne du champ sélectionné y est mise en évidence. Cliquez sur un en-tête de colonne pour régler ce champ. Dans ce mode, **Rechercher** ne garde que les lignes qui contiennent le texte cherché. Toutes les colonnes restent affichées : les valeurs trouvées et les noms de champs ou de colonnes correspondants sont surlignés. Un clic sur une ligne la met en évidence, pour la suivre plus facilement à l'écran.
+Le mode **Résultat** montre la table telle qu'elle sera écrite dans le package. La colonne du champ sélectionné y est mise en évidence. Cliquez sur un en-tête de colonne pour régler ce champ. Dans ce mode, **Rechercher** ne garde que les lignes qui contiennent le texte cherché. Toutes les colonnes restent affichées : les valeurs trouvées et les noms de champs ou de colonnes correspondants sont surlignés. Un clic sur une ligne la met en évidence, pour la suivre plus facilement à l'écran.
+
+**Ajouter une ligne** crée, dans ce même mode, une ligne saisie à la main : utile pour un enregistrement absent de Navision ou une table sans feuille source. Les lignes ajoutées apparaissent en tête, marquées `+1`, `+2`…, et sont écrites avant celles de la source. Saisissez directement la valeur BC de chaque champ : les options et booléens proposent leurs valeurs, une cellule vide reçoit la valeur par défaut BC (affichée en grisé), et une valeur acceptée est ramenée au format BC en quittant la cellule (majuscules pour un code, par exemple). **Entrée** passe à la ligne suivante, ou en crée une après la dernière. La croix, au survol du numéro, supprime la ligne. Ces lignes sont contrôlées comme les autres, clé primaire comprise, et enregistrées avec le mapping. Elles ne sont écrites que si la table est remplacée ou complétée : une table sans feuille source passe d'elle-même en *Ajouter à l'existant*.
 
 ### 5. Filtrer les lignes
 
@@ -69,7 +71,7 @@ Par défaut, toutes les lignes de la feuille Navision sont reprises. Pour n'en g
 1. Cliquez sur le bouton à entonnoir du champ. La liste des valeurs présentes s'ouvre, avec leur nombre d'occurrences. Comme dans Excel, toutes les valeurs sont cochées tant qu'il n'y a pas de filtre.
 2. Décochez les valeurs à écarter. La case à gauche de **Rechercher…** coche ou décoche d'un coup toutes les valeurs affichées : avec une recherche, elle ne porte que sur les résultats. **Effacer** retire le filtre.
 
-Le bouton affiche alors les valeurs retenues. Si plusieurs champs sont filtrés, une ligne n'est conservée que si elle passe tous les filtres. Le nombre de lignes retenues apparaît dans le badge de la table, dans la colonne de gauche. Les contrôles, l'aperçu et le package généré ne tiennent compte que de ces lignes.
+Le bouton affiche alors les valeurs retenues. Si plusieurs champs sont filtrés, une ligne n'est conservée que si elle passe tous les filtres. Le nombre de lignes retenues apparaît dans le badge de la table, dans la colonne de gauche. Les contrôles, les Résultat et le package généré ne tiennent compte que de ces lignes ; les lignes ajoutées à la main ne sont pas filtrées.
 
 ### 6. Vérifier les anomalies
 
@@ -78,11 +80,11 @@ L'outil contrôle chaque valeur par rapport au type du champ BC (texte, code, da
 - **en rouge, les erreurs** : la valeur ne peut pas être importée (date invalide, option inconnue, texte trop long…) ;
 - **en orange, les alertes** : la valeur a été modifiée (tronquée, par exemple).
 
-Les doublons et les valeurs vides sur la clé primaire sont aussi signalés. Par défaut, la clé est le premier champ. Le bouton **Clé**, en haut du détail d'un champ, ajoute ce champ à la clé ou l'en retire.
+Les doublons et les valeurs vides sur la clé primaire sont aussi signalés. Par défaut, la clé est le premier champ. L'icône de clé, à droite du type en haut du détail d'un champ, ajoute ce champ à la clé ou l'en retire ; dorée, elle signale un champ de la clé, ici comme dans la liste des champs.
 
 ### 7. Générer le package
 
-Cliquez sur **Générer le package**. Un récapitulatif indique, pour chaque table, la source, le nombre de lignes finales et l'état des contrôles. Vous pouvez télécharger un **rapport des anomalies** (CSV) pour les corriger dans Navision.
+Cliquez sur **Générer le package**. Un récapitulatif indique, pour chaque table, la source, le nombre de Résultat et l'état des contrôles. Une case à cocher devant chaque table choisit celles à générer : toutes sont cochées au départ, la case de l'en-tête coche ou décoche tout, et un clic sur la ligne suffit. Une table décochée est laissée inchangée dans le fichier, et ses anomalies sont exclues du rapport. Vous pouvez télécharger un **rapport des anomalies** (CSV) pour les corriger dans Navision.
 
 Le fichier produit s'appelle `<nom du package>_rempli_<date>.xlsx`. Les valeurs encore en erreur sont laissées vides, sauf les options inconnues, qui sont écrites telles quelles.
 
@@ -105,7 +107,7 @@ Il propose ensuite des réglages de génération, enregistrés avec le mapping :
 
 Le mapping en cours est sauvegardé automatiquement dans le navigateur. Cette sauvegarde est liée à l'emplacement du fichier HTML : si vous le déplacez ou le renommez, elle n'est plus retrouvée.
 
-Pour conserver ou partager un mapping, cliquez sur **Exporter le mapping** (ou Ctrl+S). Vous obtenez un fichier .json qui contient les correspondances, les mises en forme, les filtres et les options de génération. Un mapping enregistré avec les anciennes fonctions *Correspondances globales* ou *Modèles de correspondance* est repris : leurs correspondances sont ajoutées à celles de chaque champ concerné, pour les valeurs présentes dans sa colonne. Vous le rechargerez avec **Importer le mapping**, par exemple pour traiter un nouvel export Navision avec les mêmes règles.
+Pour conserver ou partager un mapping, cliquez sur **Exporter le mapping** (ou Ctrl+S). Vous obtenez un fichier .json qui contient les correspondances, les mises en forme, les filtres, les lignes ajoutées à la main et les options de génération. Un mapping enregistré avec les anciennes fonctions *Correspondances globales* ou *Modèles de correspondance* est repris : leurs correspondances sont ajoutées à celles de chaque champ concerné, pour les valeurs présentes dans sa colonne. Vous le rechargerez avec **Importer le mapping**, par exemple pour traiter un nouvel export Navision avec les mêmes règles.
 
 ## Raccourcis clavier
 

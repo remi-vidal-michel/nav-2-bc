@@ -5,7 +5,7 @@
 function newMap() { return { app: APP_ID, version: MAP_VERSION, settings: defaultSettings(), tables: {} }; }
 const newF = () => ({ kind: 'none', col: '', value: '', tpl: '', map: [], case: 'none', repFrom: '', repTo: '', repAt: 'start', padLen: 0, padChar: '0', padNum: true, prefix: '', suffix: '', dflt: '', filter: null });
 
-function tm(t) { return (S.map.tables[t.name] ||= { source: null, headerRow: 1, mode: 'keep', keys: null, fields: {} }); }
+function tm(t) { return (S.map.tables[t.name] ||= { source: null, headerRow: 1, mode: 'keep', keys: null, fields: {}, manual: [] }); }
 function getF(t, f) { return tm(t).fields[f.key] || null; }
 function isMapped(F) { return !!F && ((F.kind === 'col' && !!F.col) || (F.kind === 'const') || (F.kind === 'tpl' && !!F.tpl)); }
 function fmtChips(F, f) {
@@ -57,6 +57,22 @@ function distinctValues(ctx, colName, limit = 300) {
   for (const r of ctx.rows) { const s = cellStr(r[col.idx]).trim(); cnt.set(s, (cnt.get(s) || 0) + 1); }
   return [...cnt].sort((a, b) => b[1] - a[1]).slice(0, limit);
 }
+
+/* ---------------- lignes ajoutées à la main ----------------
+   Saisies dans la vue « Résultat » : T.manual liste, pour chaque ligne, la valeur BC de chaque champ (par clé de champ).
+   Elles sont écrites avant les lignes de la source ; une ligne entièrement vide est ignorée. */
+const manualAll = t => tm(t).manual || [];
+/* lignes ajoutées non vides -> [[n° d'affichage, valeurs]] */
+const manualRows = t => manualAll(t).map((m, i) => [i + 1, m]).filter(([, m]) => Object.values(m).some(v => String(v).trim() !== ''));
+const manualLabel = n => `ajoutée ${n}`;
+/* valeur saisie -> {v, e, w, d} : convertie au type du champ, valeur par défaut BC si vide */
+function manualCell(f, raw) {
+  const set = S.map.settings; const s = String(raw ?? '').trim();
+  if (s === '') { const d = set.fillDefaults ? f.dflt : ''; return { v: d, d: d !== '', input: '', empty: true }; }
+  const r = convertTo(f, s, set); return { v: r.v, e: r.e, w: r.w, input: s, d: false };
+}
+/* lignes écrites par la table, hors lignes déjà présentes dans le package : ajoutées à la main + source retenue */
+const outCount = t => (tableCtx(t)?.rows.length || 0) + manualRows(t).length;
 
 /* ---------------- filtres de lignes ----------------
    Un champ alimenté par une colonne ou une combinaison peut restreindre les lignes source :
@@ -173,17 +189,22 @@ function compileField(t, f, F, ctx) {
 function checkField(t, f) {
   const ctx = tableCtx(t); const F = getF(t, f);
   const out = { err: 0, warn: 0, ex: [], sampleIn: undefined, sampleOut: '', sampleDef: false, sampleBad: false, missing: null };
+  const note = (r, row) => {
+    if (r.e) { out.err++; if (out.ex.length < 8) out.ex.push({ row, msg: r.e, lvl: 'err' }); }
+    else if (r.w) { out.warn++; if (out.ex.length < 8) out.ex.push({ row, msg: r.w, lvl: 'warn' }); }
+  };
+  // lignes ajoutées à la main d'abord, comme dans le fichier ; l'exemple vient toujours de la source
+  for (const [n, m] of manualRows(t)) note(manualCell(f, m[f.key]), manualLabel(n));
   if (!ctx || !ctx.rows.length) { out.sampleOut = S.map.settings.fillDefaults ? f.dflt : ''; out.sampleDef = true; return out; }
   if (F?.kind === 'col' && F.col && !ctx.byName.has(F.col)) {
     out.missing = `colonne « ${F.col} » introuvable dans la feuille source`;
-    out.err = ctx.rows.length; out.ex = [{ row: '', msg: out.missing, lvl: 'err' }]; return out;
+    out.err += ctx.rows.length; out.ex.unshift({ row: '', msg: out.missing, lvl: 'err' }); return out;
   }
   const fn = compileField(t, f, F, ctx); const mapped = isMapped(F);
   let got = false;
   for (let i = 0; i < ctx.rows.length; i++) {
     const r = fn(ctx.rows[i]);
-    if (r.e) { out.err++; if (out.ex.length < 8) out.ex.push({ row: ctx.rowNums[i], msg: r.e, lvl: 'err' }); }
-    else if (r.w) { out.warn++; if (out.ex.length < 8) out.ex.push({ row: ctx.rowNums[i], msg: r.w, lvl: 'warn' }); }
+    note(r, ctx.rowNums[i]);
     if (!got && (r.input || i === ctx.rows.length - 1 || !mapped)) { got = true; out.sampleIn = r.input ?? ''; out.sampleOut = r.v; out.sampleDef = !!r.d; out.sampleBad = !!r.e; }
   }
   return out;
@@ -196,19 +217,21 @@ function keyFields(t) {
 const isKeyField = (t, f) => keyFields(t).includes(f);
 const keyLabel = t => keyFields(t).map(f => f.caption).join(' + ');
 function checkKeys(t) {
-  const T = tm(t); const ctx = tableCtx(t); const kf = keyFields(t);
-  if (!ctx || !kf.length) return null;
-  const fns = kf.map(f => compileField(t, f, getF(t, f), ctx));
+  const T = tm(t); const ctx = tableCtx(t); const kf = keyFields(t); const man = manualRows(t);
+  if ((!ctx && !man.length) || !kf.length) return null;
+  const fns = ctx ? kf.map(f => compileField(t, f, getF(t, f), ctx)) : [];
   const SEP = '\u0001'; const show = v => v.split(SEP).map(x => x === '' ? '(vide)' : x).join(' | ');
   const seen = new Map(); let empty = 0, dup = 0; const ex = [];
   if (T.mode === 'append') for (const r of t.existing) seen.set(kf.map(f => r[f.i]).join(SEP), 'package');
-  for (let i = 0; i < ctx.rows.length; i++) {
-    const vs = fns.map(fn => fn(ctx.rows[i]).v);
+  // lignes dans l'ordre du fichier : ajoutées à la main, puis source
+  const rows = man.map(([n, m]) => [manualLabel(n), kf.map(f => manualCell(f, m[f.key]).v)]);
+  if (ctx) ctx.rows.forEach((row, i) => rows.push([ctx.rowNums[i], fns.map(fn => fn(row).v)]));
+  for (const [label, vs] of rows) {
     // une partie vide est admise dans une clé composée ; la clé entièrement vide ne l'est pas
-    if (vs.every(v => v === '')) { empty++; if (ex.length < 6) ex.push(`ligne ${ctx.rowNums[i]} : clé vide`); continue; }
+    if (vs.every(v => v === '')) { empty++; if (ex.length < 6) ex.push(`ligne ${label} : clé vide`); continue; }
     const v = vs.join(SEP);
-    if (seen.has(v)) { dup++; if (ex.length < 6) ex.push(`ligne ${ctx.rowNums[i]} : « ${show(v)} » déjà présent ${seen.get(v) === 'package' ? 'dans le package' : `(ligne ${seen.get(v)})`}`); }
-    else seen.set(v, ctx.rowNums[i]);
+    if (seen.has(v)) { dup++; if (ex.length < 6) ex.push(`ligne ${label} : « ${show(v)} » déjà présent ${seen.get(v) === 'package' ? 'dans le package' : `(ligne ${seen.get(v)})`}`); }
+    else seen.set(v, label);
   }
   return { empty, dup, ex };
 }

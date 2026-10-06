@@ -4,14 +4,17 @@
 /* ---------------- génération du package ---------------- */
 function buildTableRows(t) {
   const ctx = tableCtx(t);
-  const fns = t.fields.map(f => compileField(t, f, getF(t, f), ctx));
-  const out = [];
+  // lignes ajoutées à la main, puis lignes de la source
+  const out = manualRows(t).map(([, m]) => t.fields.map(f => manualCell(f, m[f.key]).v));
   if (!ctx) return out;
+  const fns = t.fields.map(f => compileField(t, f, getF(t, f), ctx));
   for (const row of ctx.rows) out.push(fns.map(fn => fn(row).v));
   return out;
 }
-function effectiveMode(t) { const T = tm(t); return (T.mode !== 'keep' && T.source && getCtx(T)) ? T.mode : 'keep'; }
-async function generatePackage() {
+/* sans feuille source, la table n'est réécrite que si des lignes y ont été ajoutées à la main */
+function effectiveMode(t) { const T = tm(t); return (T.mode !== 'keep' && ((T.source && getCtx(T)) || manualRows(t).length)) ? T.mode : 'keep'; }
+/* skip : noms des tables à laisser inchangées malgré leur mapping */
+async function generatePackage(skip = new Set()) {
   const P = S.pkg; const zip = P.zip;
   const sstArr = [], sstMap = new Map(); let count = 0;
   const sid = s => { s = s ?? ''; count++; let i = sstMap.get(s); if (i === undefined) { i = sstArr.length; sstArr.push(s); sstMap.set(s, i); } return i; };
@@ -19,7 +22,7 @@ async function generatePackage() {
   const report = [];
   for (const t of P.tables) {
     busy(true, `Génération : ${t.name}…`); await nextFrame();
-    const xml = P.orig[t.path]; const mode = effectiveMode(t);
+    const xml = P.orig[t.path]; const mode = skip.has(t.name) ? 'keep' : effectiveMode(t);
     if (mode === 'keep') { zip.file(t.path, remap(xml), ZOPT); report.push({ t, mode, rows: t.existing.length }); continue; }
     const gen = buildTableRows(t);
     const rows = mode === 'append' ? t.existing.concat(gen) : gen;
@@ -69,14 +72,17 @@ async function generatePackage() {
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 }, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   return { blob, report };
 }
-function reportCSV() {
+function reportCSV(skip = new Set()) {
   const lines = [['Table', 'Ligne source', 'Champ BC', 'Valeur source', 'Valeur générée', 'Niveau', 'Message']];
   for (const t of S.pkg.tables) {
-    if (effectiveMode(t) === 'keep') continue;
+    if (skip.has(t.name) || effectiveMode(t) === 'keep') continue;
     const ctx = tableCtx(t);
+    const add = (row, f, r) => { if (r.e || r.w) lines.push([t.name, row, f.caption, r.input ?? '', r.v, r.e ? 'Erreur' : 'Alerte', r.e || r.w]); };
     for (const f of t.fields) {
+      for (const [n, m] of manualRows(t)) add(manualLabel(n), f, manualCell(f, m[f.key]));
+      if (!ctx) continue;
       const fn = compileField(t, f, getF(t, f), ctx);
-      ctx.rows.forEach((row, i) => { const r = fn(row); if (r.e || r.w) lines.push([t.name, ctx.rowNums[i], f.caption, r.input ?? '', r.v, r.e ? 'Erreur' : 'Alerte', r.e || r.w]); });
+      ctx.rows.forEach((row, i) => add(ctx.rowNums[i], f, fn(row)));
     }
     const K = S.val[t.name]?.keys; if (K) for (const e of K.ex) lines.push([t.name, '', keyLabel(t), '', '', 'Erreur', e]);
   }
