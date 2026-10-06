@@ -534,7 +534,7 @@ function switchTable(i) {
   S.ui.views[curT().name] = { ...Object.fromEntries(VIEW_KEYS.map(k => [k, S.ui[k]])), top: w?.scrollTop || 0, left: w?.scrollLeft || 0 };
   S.ui.t = i;
   const v = S.ui.views[curT().name] || {};
-  Object.assign(S.ui, { tab: 'map', filter: 'all', q: '', f: null, row: null }, Object.fromEntries(VIEW_KEYS.filter(k => k in v).map(k => [k, v[k]])));
+  Object.assign(S.ui, { tab: 'prev', filter: 'all', q: '', f: null, row: null }, Object.fromEntries(VIEW_KEYS.filter(k => k in v).map(k => [k, v[k]])));
   closePicker(); renderAll();
   const w2 = $('#gridwrap'); if (w2 && v.top != null) { w2.scrollTop = v.top; w2.scrollLeft = v.left; }
 }
@@ -737,9 +737,16 @@ function openSettings() {
     ${opt('setTrunc', s.truncate, 'Tronquer les valeurs trop longues', 'Sinon, la valeur est signalée en erreur. La longueur maximale vient du type du champ (Code[20], Text[100]…).')}
     ${opt('setUpper', s.upperCode, 'Mettre en majuscules les champs de type Code', 'Business Central stocke toujours les codes en majuscules.')}
     ${opt('setSkip', s.skipEmpty, 'Ignorer les lignes entièrement vides de la source', 'Utile pour les exports avec lignes de séparation.')}
-    <div class="actions"><button class="btn" id="setCancel">Annuler</button><button class="btn primary" id="setOk">Appliquer</button></div>`;
+    <div class="actions"><button class="btn danger" id="setReset" title="Revient au mapping automatique initial, comme « Repartir de zéro »">Reset le mapping</button><span style="flex:1"></span><button class="btn" id="setCancel">Annuler</button><button class="btn primary" id="setOk">Appliquer</button></div>`;
   const d = $('#dlgSettings'); d.showModal();
   $('#setCancel').onclick = () => d.close();
+  // équivaut à « Repartir de zéro » : mapping automatique initial, options comprises ; annulable depuis le toast
+  $('#setReset').onclick = () => {
+    const old = S.map; d.close();
+    const reload = () => { ctxCache.clear(); S.val = {}; validateAll(); renderAll(); autosave(); };
+    const n = setupFresh(); reload();
+    toast(`Mapping réinitialisé${n ? ' : ' + plural(n, 'champ associé', 'champs associés') + ' automatiquement' : ''}.`, { action: { label: 'Annuler', run: () => { S.map = old; reload(); } } });
+  };
   $('#segTheme').onclick = e => { const b = e.target.closest('[data-th]'); if (!b) return; theme = b.dataset.th; $$('#segTheme button').forEach(x => x.setAttribute('aria-pressed', x === b)); };
   $('#setOk').onclick = () => {
     setTheme(theme);
