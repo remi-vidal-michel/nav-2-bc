@@ -36,7 +36,7 @@ La colonne de gauche liste les tables du package BC. Pour chaque table, une barr
 
 En mode **Correspondances**, chaque ligne est un champ BC. Cliquez sur la source pour choisir une colonne Navision.
 
-Au choix de la feuille source, si aucun champ de la table n'est encore alimenté, l'outil associe les colonnes dont le nom correspond. Une association proposée par simple ressemblance est marquée « à vérifier » : confirmez-la ou changez-la.
+Au choix de la feuille source, si aucun champ de la table n'est encore alimenté, l'outil associe les colonnes dont le nom correspond ou ressemble. Vérifiez ces associations et changez-les au besoin.
 
 Un champ peut être alimenté de quatre façons :
 
@@ -55,7 +55,7 @@ Sélectionnez un champ pour ouvrir le panneau de droite. Vous pouvez :
 
 - **Remplacer des valeurs** : pour les champs *Option* et *Booléen*, et pour toute colonne d'au plus 10 valeurs distinctes, l'outil liste les valeurs de la colonne et vous indiquez par quoi remplacer chacune (par exemple « Homme » et « Femme » deviennent « Personne »). Pour un booléen, « Oui » et « Non » sont remplacés d'office par `true` et `false`. Pour les autres champs, la liste est vide au départ : **Ajouter une valeur** permet de choisir, parmi les valeurs de la colonne, celles à remplacer.
 - **Mettre en forme** : remplacer un texte par un autre au début, à la fin ou partout (par exemple le `S` initial par `00` : `S20343` devient `0020343`), compléter à gauche jusqu'à une longueur (par exemple `42` devient `0000042`), ajouter un préfixe ou un suffixe, changer la casse, définir une valeur si la source est vide.
-- **Copier et coller les correspondances de valeurs** d'un champ à l'autre, par exemple pour reprendre la même correspondance analytique dans chaque table qui l'utilise. Le collage ne reprend que les valeurs présentes dans la colonne Navision du champ ; les autres sont ignorées et leur nombre est indiqué. Une valeur déjà remplacée sur le champ prend la valeur collée.
+- **Appliquer un axe analytique** : le menu **Axe analytique** de la section *Correspondance des valeurs* remplit la correspondance à partir de la table **Analytique** (barre du haut) : chaque axe département de la colonne est remplacé par son axe *Agence* ou *Activité*. Les codes sont comparés sans tenir compte des zéros de tête (`033011` = `33011`) ; une valeur déjà remplacée sur le champ prend la valeur de l'axe, et le nombre de valeurs absentes de la table est indiqué. La table analytique se remplit en collant les lignes copiées depuis Excel (axe département, nom, axe agence, axe activité) et s'enregistre avec le mapping.
 - **Copier et coller la mise en forme** d'un champ à l'autre.
 
 Sous la source, le panneau affiche les lignes en anomalie. Ces sections se replient d'un clic sur leur titre. Repliées, elles gardent l'essentiel en résumé : le nombre d'anomalies ou la mise en forme appliquée. Pour voir le résultat ligne à ligne, utilisez le mode **Résultat**.
@@ -105,9 +105,9 @@ Il propose ensuite des réglages de génération, enregistrés avec le mapping :
 
 ## Enregistrer son travail
 
-Le mapping en cours est sauvegardé automatiquement dans le navigateur. Cette sauvegarde est liée à l'emplacement du fichier HTML : si vous le déplacez ou le renommez, elle n'est plus retrouvée.
+Le mapping en cours est sauvegardé automatiquement dans le navigateur, avec sa table analytique. Il est rattaché au nom exact du fichier export Navision : en rechargeant un export du même nom, le mapping est repris ; un export portant un autre nom démarre d'un mapping neuf (les 20 derniers fichiers sont conservés). Cette sauvegarde est liée à l'emplacement du fichier HTML : si vous le déplacez ou le renommez, elle n'est plus retrouvée.
 
-Pour conserver ou partager un mapping, cliquez sur **Exporter le mapping** (ou Ctrl+S). Vous obtenez un fichier .json qui contient les correspondances, les mises en forme, les filtres, les lignes ajoutées à la main et les options de génération. Un mapping enregistré avec les anciennes fonctions *Correspondances globales* ou *Modèles de correspondance* est repris : leurs correspondances sont ajoutées à celles de chaque champ concerné, pour les valeurs présentes dans sa colonne. Vous le rechargerez avec **Importer le mapping**, par exemple pour traiter un nouvel export Navision avec les mêmes règles.
+Pour conserver ou partager un mapping, cliquez sur **Exporter le mapping** (ou Ctrl+S). Vous obtenez un fichier .json nommé d'après l'export Navision (par exemple `export nav 0510 fosmed.xlsx` donne `export_nav_0510_fosmed_mapping.json`), qui contient les correspondances, les mises en forme, les filtres, les lignes ajoutées à la main, la table analytique et les options de génération. Un mapping enregistré avec les anciennes fonctions *Correspondances globales* ou *Modèles de correspondance* est repris : leurs correspondances sont ajoutées à celles de chaque champ concerné, pour les valeurs présentes dans sa colonne. Vous le rechargerez avec **Importer le mapping**, par exemple pour traiter un nouvel export Navision avec les mêmes règles.
 
 ## Raccourcis clavier
 

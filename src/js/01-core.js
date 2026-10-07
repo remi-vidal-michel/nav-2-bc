@@ -6,16 +6,15 @@
    Fichier autonome : aucune connexion réseau, aucune installation.
    ===================================================================== */
 const ZOPT = { createFolders: false };
-const APP_ID = 'nav-bc-mapper', MAP_VERSION = 1, LS_KEY = 'navbc.mapping.v1';
+const APP_ID = 'nav-bc-mapper', MAP_VERSION = 1, LS_KEY = 'navbc.mappings.v2', LS_OLD = 'navbc.mapping.v1';
 
 const S = {
   raw: null,      // {fileName, sheets:[{name, rows}], d1904}
   pkg: null,      // {fileName, zip, tables:[...], sst:[], sstPath, orig:{}}
   map: null,      // modèle de mapping courant
   // open : sections du panneau de droite ouvertes ou fermées ; views : affichage mémorisé par table
-  ui: { t: 0, f: null, filter: 'all', q: '', tab: 'prev', row: null, open: {}, views: {} },
+  ui: { t: 0, f: null, filter: 'all', q: '', tab: 'map', row: null, open: {}, views: {} },
   clip: null,     // format copié
-  clipMap: null,  // correspondances de valeurs copiées : [[valeur source, valeur BC]]
   val: {},        // résultats de contrôle par table
 };
 const defaultSettings = () => ({ fillDefaults: true, truncate: true, skipEmpty: true, upperCode: true });

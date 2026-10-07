@@ -2,18 +2,36 @@
 /* 05-persistence.js : Sauvegarde locale, import/export des modèles de mapping. */
 
 /* ---------------- persistance ---------------- */
-const autosave = debounce(() => { try { localStorage.setItem(LS_KEY, JSON.stringify({ savedAt: new Date().toISOString(), pkg: S.pkg?.fileName, raw: S.raw?.fileName, map: S.map })); } catch { } }, 400);
+/* sauvegarde locale : un mapping par nom de fichier export Navision, les LS_MAX plus récents -> {[nom]: {savedAt, pkg, map}} */
+const LS_MAX = 20;
+function savedMaps() {
+  try {
+    const all = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (all && typeof all === 'object') return all;
+    const old = JSON.parse(localStorage.getItem(LS_OLD) || 'null'); // ancienne sauvegarde unique
+    return old?.raw && old.map ? { [old.raw]: { savedAt: old.savedAt, pkg: old.pkg, map: old.map } } : {};
+  } catch { return {}; }
+}
+const autosave = debounce(() => {
+  if (!S.raw || !S.map) return;
+  try {
+    const all = savedMaps(); all[S.raw.fileName] = { savedAt: new Date().toISOString(), pkg: S.pkg?.fileName, map: S.map };
+    const keep = Object.entries(all).sort((a, b) => String(b[1]?.savedAt || '').localeCompare(String(a[1]?.savedAt || ''))).slice(0, LS_MAX);
+    localStorage.setItem(LS_KEY, JSON.stringify(Object.fromEntries(keep))); localStorage.removeItem(LS_OLD);
+  } catch { }
+}, 400);
 function exportMapping() {
   if (!S.map) return;
   const data = { ...S.map, app: APP_ID, version: MAP_VERSION, savedAt: new Date().toISOString(), packageFile: S.pkg?.fileName || null, sourceFile: S.raw?.fileName || null };
   const clean = JSON.parse(JSON.stringify(data));
   for (const tn in clean.tables) for (const k in clean.tables[tn].fields) { const F = clean.tables[tn].fields[k]; delete F.auto; if (!isMapped(F) && !F.dflt) delete clean.tables[tn].fields[k]; }
-  download(new Blob([JSON.stringify(clean, null, 2)], { type: 'application/json' }), `mapping_NAV-BC_${stamp()}.json`);
+  download(new Blob([JSON.stringify(clean, null, 2)], { type: 'application/json' }), S.raw ? `${baseName(S.raw.fileName).trim().replace(/\s+/g, '_')}_mapping.json` : `mapping_NAV-BC_${stamp()}.json`);
   toast('Mapping exporté.');
 }
 function validateMapping(obj) {
   if (!obj || typeof obj !== 'object' || !obj.tables) throw new Error("Ce fichier ne contient pas de modèle de mapping.");
   const m = newMap(); m.settings = { ...defaultSettings(), ...(obj.settings || {}) };
+  m.axes = (Array.isArray(obj.axes) ? obj.axes : []).filter(r => r && typeof r === 'object').map(r => Object.fromEntries(AXIS_COLS.map(([k]) => [k, String(r[k] ?? '').trim()]))).filter(r => r.dep);
   // anciennes correspondances partagées (correspondance globale, modèles de correspondance) : reprises à l'application
   // du mapping dans les correspondances de chaque champ, pour les valeurs présentes dans sa colonne
   const legacy = { global: [], fields: {} };

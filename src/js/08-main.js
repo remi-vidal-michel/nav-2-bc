@@ -31,19 +31,19 @@ function startWorkspace(changed) {
     $('#landing').classList.add('hidden'); $('#app').classList.remove('hidden');
     bindApp();
     if (S.pendingMap) { const m = S.pendingMap; S.pendingMap = null; S.ui.t = 0; applyImportedMapping(m); return; }
-    let saved = null; try { saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch { }
+    const saved = savedMaps()[S.raw.fileName]; // reprise stricte : même nom de fichier export Navision
     const n = setupFresh();
-    if (saved?.map?.tables && Object.keys(saved.map.tables).some(k => S.pkg.tables.some(t => t.name === k))) {
+    if (saved?.map?.tables) {
       const fresh = S.map;
       try {
         applyImportedMapping(validateMapping(saved.map), true);
         const when = saved.savedAt ? new Date(saved.savedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
-        toast(`Mapping de la session précédente restauré${when ? ' (' + when + ')' : ''}.`, { action: { label: 'Repartir de zéro', run: () => { S.map = fresh; validateAll(); renderAll(); autosave(); } } });
+        toast(`Mapping de « ${S.raw.fileName} » restauré${when ? ' (' + when + ')' : ''}.`, { action: { label: 'Repartir de zéro', run: () => { S.map = fresh; validateAll(); renderAll(); autosave(); } } });
         return;
       } catch { S.map = fresh; }
     }
     validateAll(); renderAll(); autosave();
-    toast(n ? `${plural(n, 'champ associé', 'champs associés')} automatiquement par leur nom. Vérifiez ceux marqués « à vérifier ».` : 'Associez les feuilles source aux tables du package BC pour commencer.', { ms: 7000 });
+    toast(n ? `${plural(n, 'champ associé', 'champs associés')} automatiquement par leur nom.` : 'Associez les feuilles source aux tables du package BC pour commencer.', { ms: 7000 });
     return;
   }
   // remplacement d'un fichier en cours de session : on garde le mapping

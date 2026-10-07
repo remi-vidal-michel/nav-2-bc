@@ -251,14 +251,14 @@ function renderInspector() {
     const nMapped = (F.map || []).filter(p => p[1] !== '').length;
     vmapHTML = secHTML('map', 'Correspondance des valeurs', true, {
       closedHint: nMapped ? plural(nMapped, 'valeur remplacée', 'valeurs remplacées') : '',
-      extra: `<button class="btn small ghost" id="btnCopyMap" ${nMapped ? '' : 'disabled'}>Copier</button><button class="btn small ghost" id="btnPasteMap" ${S.clipMap ? '' : 'disabled'} title="Colle les correspondances des valeurs présentes dans cette colonne">Coller</button>`,
+      extra: `<select id="selAxis" aria-label="Axe analytique" title="Remplit la correspondance depuis la table analytique : axe département → axe choisi"><option value="">Axe analytique…</option>${AXES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>`,
       body: `<datalist id="${listId}">${targets.map(v => `<option value="${esc(v)}">`).join('')}</datalist>
       ${rows.length ? `<table class="vmap">${rows.map(([v, n, b], i) => `<tr data-i="${i}"><td class="v" title="${esc(v)}">${esc(v === '' ? '(vide)' : v)}</td><td class="n">${n ? nf(n) : ''}</td><td class="a">→</td>
         <td><input type="text" list="${listId}" data-from="${esc(v)}"${all && !bool ? '' : ' data-keep'} value="${esc(b)}" placeholder="inchangée"></td><td class="r">${vmapDot(f, F, v, b)}</td>${all ? '' : `<td class="x"><button class="btn small ghost" data-vdel="${esc(v)}" title="Retirer" aria-label="Retirer">×</button></td>`}</tr>`).join('')}</table>` : ''}
       ${all ? '' : `<button class="btn small" id="btnVmapAdd" style="margin-top:${rows.length ? 8 : 0}px">+ Ajouter une valeur</button>`}`,
     });
   }
-  const fmtSum = fmtChips(F, f).filter(([c, l]) => c !== 'sug' && !/corresp\./.test(l)).map(([, l]) => l).join(', ');
+  const fmtSum = fmtChips(F, f).filter(([, l]) => !/corresp\./.test(l)).map(([, l]) => l).join(', ');
   const fmt = secHTML('fmt', 'Mise en forme', true, {
     closedHint: esc(fmtSum || 'aucune'),
     extra: `<button class="btn small ghost" id="btnCopyFmt">Copier</button><button class="btn small ghost" id="btnPasteFmt" ${S.clip ? '' : 'disabled'}>Coller</button>`,
@@ -291,7 +291,6 @@ function renderInspector() {
     <div class="sec"><h4>Source</h4>
       <div class="seg" id="segKind" style="margin-bottom:10px">${[['col', 'Colonne'], ['const', 'Constante'], ['tpl', 'Combinaison'], ['none', 'Aucune']].map(([k, l]) => `<button data-kind="${k}" aria-pressed="${kind === k}">${l}</button>`).join('')}</div>
       ${srcBlock}
-      ${F.auto === 'fuzzy' ? `<div class="note warn" style="margin-top:8px">Association proposée par ressemblance de nom. <button class="btn small" id="btnConfirm">Confirmer</button></div>` : ''}
     </div>
     ${secHTML('iss', 'Anomalies', true, { body: '<div id="body-iss"></div>' })}
     ${vmapHTML}
@@ -534,7 +533,7 @@ function switchTable(i) {
   S.ui.views[curT().name] = { ...Object.fromEntries(VIEW_KEYS.map(k => [k, S.ui[k]])), top: w?.scrollTop || 0, left: w?.scrollLeft || 0 };
   S.ui.t = i;
   const v = S.ui.views[curT().name] || {};
-  Object.assign(S.ui, { tab: 'prev', filter: 'all', q: '', f: null, row: null }, Object.fromEntries(VIEW_KEYS.filter(k => k in v).map(k => [k, v[k]])));
+  Object.assign(S.ui, { tab: 'map', filter: 'all', q: '', f: null, row: null }, Object.fromEntries(VIEW_KEYS.filter(k => k in v).map(k => [k, v[k]])));
   closePicker(); renderAll();
   const w2 = $('#gridwrap'); if (w2 && v.top != null) { w2.scrollTop = v.top; w2.scrollLeft = v.left; }
 }
@@ -652,7 +651,7 @@ function bindApp() {
   insp.addEventListener('click', e => {
     const go = e.target.closest('[data-goto]'); if (go) { e.preventDefault(); selectField(go.dataset.goto); return; }
     const [t, f] = cur(); if (!f) return;
-    if (e.target.closest('summary button')) e.preventDefault();
+    if (e.target.closest('summary button, summary select')) e.preventDefault();
     else { const sum = e.target.closest('summary'); const d = sum?.parentElement; if (d?.dataset.sec) S.ui.open[d.dataset.sec] = !d.open; }
     const k = e.target.closest('[data-kind]');
     if (k) {
@@ -663,22 +662,10 @@ function bindApp() {
     }
     const pick = e.target.closest('[data-pick]'); if (pick) { openPicker(pick, pick.dataset.pick); e.stopPropagation(); return; }
     if (e.target.closest('#btnKey')) { setKeyField(t, f, !isKeyField(t, f)); return; }
-    if (e.target.id === 'btnConfirm') { setField(t, f, { auto: null }, true); return; }
     if (e.target.id === 'btnVmapAdd') { openVmapAdd(e.target); e.stopPropagation(); return; }
     const vdel = e.target.closest('[data-vdel]');
     if (vdel) { const k = vdel.dataset.vdel.trim().toLowerCase(); const F = getF(t, f); setField(t, f, { map: (F.map || []).filter(([a]) => a.trim().toLowerCase() !== k) }, true); return; }
     if (e.target.id === 'btnPadHint') { setField(t, f, { padLen: f.padHint, padNum: true }, true); return; }
-    if (e.target.id === 'btnCopyMap') {
-      S.clipMap = (getF(t, f).map || []).filter(p => p[1] !== '').map(p => [...p]); renderInspector();
-      toast(`${plural(S.clipMap.length, 'correspondance copiée', 'correspondances copiées')}. Sélectionnez un autre champ puis « Coller ».`); return;
-    }
-    // collage partiel : seules les valeurs présentes dans la colonne du champ sont reprises, en remplaçant celles déjà saisies
-    if (e.target.id === 'btnPasteMap' && S.clipMap) {
-      const F = getF(t, f); const r = mergeValueMap(t, F, S.clipMap, true);
-      if (r.n) setField(t, f, { map: r.map }, true);
-      const skip = r.miss ? `, ${plural(r.miss, 'valeur absente', 'valeurs absentes')} de la colonne « ${F.col} » ignorée${r.miss > 1 ? 's' : ''}` : '';
-      toast(r.n ? `${plural(r.n, 'correspondance collée', 'correspondances collées')}${skip}.` : `Aucune des valeurs copiées n'est présente dans la colonne « ${F.col} ».`); return;
-    }
     if (e.target.id === 'btnCopyFmt') { const F = getF(t, f) || newF(); S.clip = { case: F.case, repFrom: F.repFrom, repTo: F.repTo, repAt: F.repAt, padLen: F.padLen, padChar: F.padChar, padNum: F.padNum, prefix: F.prefix, suffix: F.suffix, dflt: F.dflt }; renderInspector(); toast('Format copié. Sélectionnez un autre champ puis « Coller ».'); return; }
     if (e.target.id === 'btnPasteFmt' && S.clip) { setField(t, f, { ...S.clip }, true); toast('Format appliqué.'); return; }
   });
@@ -703,6 +690,7 @@ function bindApp() {
     else if (id === 'inRepAt') setField(t, f, { repAt: e.target.value }, false);
     else if (id === 'inPadNum') setField(t, f, { padNum: e.target.checked }, false);
     else if (id === 'inConst' && e.target.tagName === 'SELECT') setField(t, f, { value: e.target.value }, false);
+    else if (id === 'selAxis' && e.target.value) applyAxis(t, f, e.target.value);
     else if (id === 'selTplCol' && e.target.value) {
       const inp = $('#inTpl'); const ins = `{${e.target.value}}`; const p = inp.selectionStart ?? inp.value.length;
       inp.value = inp.value.slice(0, p) + (inp.value && p && inp.value[p - 1] !== ' ' ? ' ' : '') + ins + inp.value.slice(p);
@@ -715,6 +703,7 @@ function bindApp() {
   $('#chipRaw').onclick = () => $('#fileRaw').click();
   $('#chipPkg').onclick = () => $('#filePkg').click();
   $('#btnSettings').onclick = openSettings;
+  $('#btnAxes').onclick = openAxes;
   $('#btnGenerate').onclick = openGenerate;
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.map && !$('#app').classList.contains('hidden')) { e.preventDefault(); exportMapping(); }
@@ -724,7 +713,63 @@ function bindApp() {
   center.addEventListener('scroll', closePicker, true);
 }
 
+/* application d'un axe à la correspondance des valeurs du champ (voir axisMap) */
+function applyAxis(t, f, axis) {
+  const label = AXES.find(a => a[0] === axis)[1];
+  if (!S.map.axes?.length) { renderInspector(); toast('La table analytique est vide.', { action: { label: 'La remplir', run: openAxes } }); return; }
+  const F = getF(t, f); const r = axisMap(t, F, axis);
+  if (r.n) setField(t, f, { map: r.map }, true); else renderInspector();
+  const skip = r.miss ? `, ${plural(r.miss, 'valeur', 'valeurs')} de la colonne sans axe département dans la table` : '';
+  toast(r.n ? `Axe ${label} appliqué : ${plural(r.n, 'correspondance', 'correspondances')}${skip}.` : `Aucune valeur de la colonne « ${F.col} » ne figure dans la table analytique.`, r.miss ? { ms: 6000 } : {});
+}
+
 /* ----- dialogues ----- */
+/* table analytique : saisie à la main ou collage d'un tableau copié depuis Excel ; enregistrée avec le mapping */
+function openAxes() {
+  const rows = (S.map.axes || []).map(r => ({ ...r }));
+  const blank = () => Object.fromEntries(AXIS_COLS.map(([k]) => [k, '']));
+  $('#dlgAxesBody').innerHTML = `<h3>Axes analytiques</h3>
+    <div class="sub">Pour chaque axe département, l'agence et l'activité correspondantes. Collez les lignes copiées depuis Excel (4 colonnes, ou 3 sans le nom) : un axe département déjà présent est mis à jour. Appliquez ensuite un axe à un champ depuis « Correspondance des valeurs ».</div>
+    <div class="axwrap"><table class="sumtable axtable"><thead><tr>${AXIS_COLS.map(([, l]) => `<th>${l}</th>`).join('')}<th></th></tr></thead><tbody id="axRows"></tbody></table></div>
+    <div class="actions">
+      <button class="btn" id="axAdd">+ Ajouter une ligne</button>
+      <button class="btn danger" id="axClear">Tout effacer</button>
+      <span style="flex:1"></span>
+      <button class="btn" id="axCancel">Annuler</button>
+      <button class="btn primary" id="axOk">Enregistrer</button>
+    </div>`;
+  const draw = () => {
+    $('#axRows').innerHTML = rows.length
+      ? rows.map((r, i) => `<tr data-i="${i}">${AXIS_COLS.map(([k, l]) => `<td><input type="text" data-k="${k}" value="${esc(r[k])}" aria-label="${l}"${k === 'nom' ? '' : ' class="mono"'}></td>`).join('')}<td class="x"><button class="btn small ghost" data-adel="${i}" title="Retirer" aria-label="Retirer la ligne">×</button></td></tr>`).join('')
+      : `<tr><td colspan="${AXIS_COLS.length + 1}" class="axempty">Aucune ligne. Copiez le tableau dans Excel puis collez-le ici (Ctrl+V).</td></tr>`;
+    $('#axClear').disabled = !rows.length;
+  };
+  draw();
+  const d = $('#dlgAxes'); d.showModal();
+  $('#axAdd').onclick = () => { rows.push(blank()); draw(); $$('#axRows tr:last-child input')[0]?.focus(); };
+  $('#axClear').onclick = () => { rows.length = 0; draw(); };
+  $('#axCancel').onclick = () => d.close();
+  $('#axRows').onclick = e => { const b = e.target.closest('[data-adel]'); if (b) { rows.splice(+b.dataset.adel, 1); draw(); } };
+  $('#axRows').oninput = e => { const inp = e.target; rows[+inp.closest('tr').dataset.i][inp.dataset.k] = inp.value; };
+  // collage d'un tableau (tabulations ou plusieurs lignes) ; une ligne d'en-têtes est ignorée
+  d.onpaste = e => {
+    const txt = e.clipboardData?.getData('text/plain') || ''; if (!/[\t\n]/.test(txt.trim())) return;
+    e.preventDefault();
+    const keys = ['dep', 'agence', 'activite'];
+    const got = txt.split(/\r?\n/).map(l => l.split('\t').map(c => c.trim())).filter(c => c.some(Boolean) && !/departement/.test(norm(c[0])))
+      .map(c => c.length >= 4 ? Object.fromEntries(AXIS_COLS.map(([k], j) => [k, c[j] || ''])) : { ...blank(), ...Object.fromEntries(keys.map((k, j) => [k, c[j] || ''])) })
+      .filter(r => r.dep);
+    if (!got.length) return;
+    for (let i = rows.length - 1; i >= 0; i--) if (!Object.values(rows[i]).some(Boolean)) rows.splice(i, 1); // lignes vides remplacées par le collage
+    let upd = 0;
+    for (const r of got) { const i = rows.findIndex(x => axisKey(x.dep) === axisKey(r.dep)); if (i >= 0) { rows[i] = r; upd++; } else rows.push(r); }
+    draw(); toast(`${plural(got.length, 'ligne collée', 'lignes collées')}${upd ? ` dont ${plural(upd, 'mise à jour', 'mises à jour')}` : ''}.`);
+  };
+  $('#axOk').onclick = () => {
+    S.map.axes = rows.map(r => Object.fromEntries(AXIS_COLS.map(([k]) => [k, String(r[k] || '').trim()]))).filter(r => r.dep);
+    d.close(); autosave(); toast(`Table analytique enregistrée : ${plural(S.map.axes.length, 'axe département', 'axes département')}.`);
+  };
+}
 function openSettings() {
   const s = S.map.settings;
   const opt = (id, on, title, sub) => `<label class="chk"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><span>${title}<small>${sub}</small></span></label>`;

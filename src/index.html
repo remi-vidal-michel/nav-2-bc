@@ -32,6 +32,7 @@
     <div class="filechip" id="chipRaw" title="Remplacer l'export Navision"><b>Navision</b><span></span></div>
     <div class="filechip" id="chipPkg" title="Remplacer le package BC"><b>Package</b><span></span></div>
     <div class="spacer"></div>
+    <button class="btn ghost" id="btnAxes" title="Table des axes analytiques : département, agence, activité"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M2 6h12M2 9.75h12M6.5 6v7.5"/></svg>Analytique</button>
     <button class="btn ghost" id="btnImportMap" title="Charger un modèle de mapping (.json)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2v8M5 7l3 3 3-3M2.5 11v2.5h11V11"/></svg>Importer le mapping</button>
     <button class="btn ghost" id="btnExportMap" title="Enregistrer le mapping dans un fichier (Ctrl+S)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 10V2M5 5l3-3 3 3M2.5 11v2.5h11V11"/></svg>Exporter le mapping</button>
     <button class="btn ghost" id="btnSettings" title="Apparence et options de génération"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings preview-icon"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>Options</button>
@@ -54,6 +55,7 @@
 
 <dialog id="dlgGen"><div class="dlg" id="dlgGenBody"></div></dialog>
 <dialog id="dlgSettings"><div class="dlg settings" id="dlgSetBody"></div></dialog>
+<dialog id="dlgAxes"><div class="dlg" id="dlgAxesBody"></div></dialog>
 <div id="toasts" aria-live="polite"></div>
 <div id="busy" class="hidden"><div id="busyText">Traitement…</div></div>
 <input type="file" id="fileRaw" accept=".xlsx,.xlsm,.csv,.txt" class="hidden">

@@ -2,7 +2,7 @@
 /* 04-engine.js : Modèle de mapping, contexte source, moteur de transformation, contrôles, mapping automatique. */
 
 /* ---------------- modèle de mapping ---------------- */
-function newMap() { return { app: APP_ID, version: MAP_VERSION, settings: defaultSettings(), tables: {} }; }
+function newMap() { return { app: APP_ID, version: MAP_VERSION, settings: defaultSettings(), axes: [], tables: {} }; }
 const newF = () => ({ kind: 'none', col: '', value: '', tpl: '', map: [], case: 'none', repFrom: '', repTo: '', repAt: 'start', padLen: 0, padChar: '0', padNum: true, prefix: '', suffix: '', dflt: '', filter: null });
 
 function tm(t) { return (S.map.tables[t.name] ||= { source: null, headerRow: 1, mode: 'keep', keys: null, fields: {}, manual: [] }); }
@@ -10,7 +10,6 @@ function getF(t, f) { return tm(t).fields[f.key] || null; }
 function isMapped(F) { return !!F && ((F.kind === 'col' && !!F.col) || (F.kind === 'const') || (F.kind === 'tpl' && !!F.tpl)); }
 function fmtChips(F, f) {
   const c = []; if (!F) return c;
-  if (F.auto === 'fuzzy') c.push(['sug', 'à vérifier']);
   if (F.map?.some(p => p[1] !== '')) c.push(['', `${F.map.filter(p => p[1] !== '').length} corresp.`]);
   if (F.repFrom) c.push(['', 'remplacement']);
   if (F.padLen > 0) c.push(['', `${F.padChar || '0'}→${F.padLen}`]);
@@ -125,6 +124,25 @@ function mergeValueMap(t, F, pairs, overwrite) {
     else if (overwrite || map[i][1] === '') { map[i][1] = b; n++; }
   }
   return { map, n, miss };
+}
+
+/* ---------------- axes analytiques ----------------
+   S.map.axes : table de référence [{dep, nom, agence, activite}]. Appliquer un axe à un champ remplit sa correspondance
+   des valeurs : axe département (valeur source) -> axe agence ou activité (valeur BC), en remplaçant celles déjà saisies.
+   Les codes sont comparés sans tenir compte de la casse ni des zéros de tête (033011 = 33011). */
+const AXIS_COLS = [['dep', 'Axe département'], ['nom', 'Nom'], ['agence', 'Axe agence'], ['activite', 'Axe activité']];
+const AXES = [['agence', 'Agence'], ['activite', 'Activité']];
+const axisKey = s => String(s ?? '').trim().toLowerCase().replace(/^0+(?=\d)/, '');
+/* -> {map, n : valeurs reprises, miss : valeurs de la colonne sans axe département dans la table} */
+function axisMap(t, F, axis) {
+  const ref = new Map();
+  for (const r of S.map.axes || []) if (r.dep && r[axis]) ref.set(axisKey(r.dep), r[axis]);
+  const ctx = tableCtx(t); const pairs = []; let miss = 0;
+  for (const [v] of ctx && F?.kind === 'col' ? sourceValues(F, ctx) : []) {
+    if (v === '') continue;
+    const b = ref.get(axisKey(v)); if (b === undefined) miss++; else pairs.push([v, b]);
+  }
+  return { ...mergeValueMap(t, F, pairs, true), miss };
 }
 
 /* ---------------- moteur de transformation ---------------- */

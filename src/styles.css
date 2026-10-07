@@ -129,6 +129,8 @@ main.center{display:flex;flex-direction:column;min-width:0;min-height:0;backgrou
 .seg{display:inline-flex;border:1px solid var(--field-line);border-radius:6px;overflow:hidden}
 .seg button{border:0;background:var(--field);height:28px;padding:0 10px;cursor:pointer;font-size:13px;border-right:1px solid var(--field-line)}
 .seg button:last-child{border-right:0}
+/* onglets Correspondances / Résultat : même largeur */
+.seg[role=tablist]{display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr}
 .seg button[aria-pressed=true],.seg button[aria-selected=true]{background:var(--acc);color:var(--acc-ink);font-weight:600}
 .search{position:relative;display:inline-flex;align-items:center}
 .search svg{position:absolute;left:9px;width:14px;height:14px;color:var(--muted);pointer-events:none}
@@ -159,7 +161,6 @@ main.center{display:flex;flex-direction:column;min-width:0;min-height:0;backgrou
 .srcbtn svg{width:14px;height:14px;flex:none;color:var(--muted)}
 .chips{display:flex;flex-wrap:wrap;gap:4px;min-width:0;padding-right:6px}
 .chip{font-size:11px;padding:1px 6px;border-radius:4px;background:var(--line2);color:var(--muted);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-.chip.sug{background:var(--warn-soft);color:var(--warn)}
 .fltbtn span{flex:1}
 .fltbtn:not(.on){color:var(--faint)}
 .fltbtn.on{background:var(--acc-soft);border-color:var(--acc-line)}
@@ -304,6 +305,18 @@ dialog::backdrop{background:rgba(15,20,25,.45)}
 .sumtable tr.pick{cursor:pointer}
 .sumtable tr.pick:hover td{background:var(--panel2)}
 .sumtable tr.off td:not(.ck){color:var(--faint)}
+/* table analytique : cellules modifiables, en-tête fixe au défilement */
+#dlgAxes{width:min(860px,94vw)}
+.axwrap{max-height:55vh;overflow:auto;border:1px solid var(--line2);border-radius:6px}
+.axtable th{position:sticky;top:0;background:var(--panel);z-index:1}
+.axtable td{padding:3px 4px}
+.axtable th:first-child,.axtable td:first-child{padding-left:8px}
+.axtable input{height:28px;width:100%}
+.axtable input.mono{font-family:var(--mono);font-size:12.5px}
+.axtable td.x{width:30px;padding:0 4px 0 0}
+.axtable td.x .btn{width:24px;padding:0;justify-content:center}
+.axtable .axempty{padding:22px 8px;text-align:center;color:var(--muted)}
+.sec>summary select{height:26px;font-size:12.5px;padding:0 4px}
 .settings label.chk{padding:10px 0;border-bottom:1px solid var(--line2)}
 .settings label.chk small{display:block;color:var(--muted);font-size:12.5px}
 .settings h4{margin:16px 0 2px;font-size:13px}
